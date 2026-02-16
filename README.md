@@ -1,67 +1,67 @@
 <div align="center">
 
-<img src="logo.png" alt="Billarr Logo" width="200"/>
+# ⚓ Billarr
 
-# Billarr
+<img src="logo.png" alt="Billarr Logo" width="300"/>
 
-### Self-Hosted Bill Tracking & Reminders for the *arr Stack
+**Self-hosted bill tracking and reminders for the \*arr stack**
 
-**Never miss a payment again! 🏴‍☠️**
+*Never walk the plank of late fees again!* 🏴‍☠️💰
 
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Setup](#-setup-guides) • [Contributing](#-contributing)
-
----
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Screenshots](#-screenshots) • [Contributing](#-contributing)
 
 </div>
 
+---
+
 ## 🎯 What is Billarr?
 
-Billarr is a beautiful, self-hosted bill tracking application designed to integrate seamlessly with your *arr stack. Keep track of all your bills, visualize them on a calendar, and never miss a payment with automated reminders via Telegram and Google Calendar.
+Billarr is a beautiful, self-hosted bill tracking and reminder application designed for the self-hosted community. Keep track of all your bills, visualize them in a clean calendar view, and never miss a payment with integrated Telegram and Google Calendar notifications.
 
-**Privacy First** - Your financial data stays on YOUR server  
-**Beautiful UI** - Clean, modern interface that works perfectly on mobile  
-**Smart Reminders** - Automated notifications via Telegram & Google Calendar  
-**Easy Deploy** - One command with Docker Compose
+### Why Billarr?
+
+- 🔒 **Privacy First** - Your financial data stays on your server
+- 🏴‍☠️ **\*arr Ecosystem** - Fits perfectly with Sonarr, Radarr, and friends
+- 📱 **Mobile Friendly** - Gorgeous responsive design
+- 🔔 **Smart Reminders** - Telegram bots + Google Calendar sync
+- 🐳 **Easy Deploy** - One Docker Compose command
+- 🎨 **Beautiful UI** - Modern design with thoughtful UX
 
 ---
 
 ## ✨ Features
 
-### 📅 **Calendar View**
-- Visual calendar showing all your bills by due date
-- Color-coded by status (pending, paid, overdue)
-- Click any bill to see full details
-- Month navigation
+### 📅 Bill Management
+- **Calendar View** - See all bills at a glance organized by due date
+- **List View** - Quick card-based overview of all your bills
+- **Detailed Tracking** - Store vendor, amount, due date, payment method, account info, and notes
+- **Categories** - Organize bills by type (utilities, rent, subscriptions, etc.)
+- **Recurring Bills** - Set weekly, monthly, quarterly, or annual recurring payments
+- **Status Tracking** - Mark bills as pending, paid, or overdue
 
-### 📝 **Bill Management**
-- Create, edit, and delete bills with ease
-- Track vendor, amount, due date, payment method, and more
-- Support for recurring bills (weekly, monthly, quarterly, annually)
-- Custom categories and notes
-- Account information storage
+### 🔔 Notifications
+- **📱 Telegram** - Instant push notifications to your phone
+- **📅 Google Calendar** - Auto-sync bills as calendar events with reminders
+- **🤖 Smart Scheduler** - Runs every hour, checks for bills in reminder window
+- **⚙️ Customizable** - Set reminder days per bill (3 days before, 1 week before, etc.)
 
-### 🔔 **Smart Notifications**
-- **Telegram Bot Integration** - Instant push notifications
-- **Google Calendar Sync** - Automatic calendar events with reminders
-- **Hourly Scheduler** - Background service checks for upcoming bills
-- **Customizable Timing** - Set reminder days per bill (0-30 days before due)
+### 🎨 Design
+- **Clean & Modern** - Thoughtful UI with Fraunces + Manrope typography
+- **Responsive** - Works beautifully on desktop, tablet, and mobile
+- **Dark Theme Ready** - Easy to customize colors
+- **Accessible** - WCAG compliant design
 
-### 📱 **Mobile Friendly**
-- Fully responsive design
-- Touch-optimized interface
-- Add to home screen on iOS/Android
-- Works great on tablets
-
-### 🔒 **Privacy & Security**
-- Self-hosted - your data never leaves your server
-- No analytics or tracking
-- SQLite database - simple and reliable
-- Optional Google Calendar OAuth
+### 🔧 Technical
+- **Self-Hosted** - Full control over your data
+- **SQLite Database** - Lightweight and portable
+- **Docker Ready** - Deploy in seconds
+- **RESTful API** - Clean backend architecture
+- **No Tracking** - Zero analytics or third-party services
 
 ---
 
@@ -69,151 +69,109 @@ Billarr is a beautiful, self-hosted bill tracking application designed to integr
 
 ### Prerequisites
 - Docker and Docker Compose installed
+- 5 minutes of your time
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/sovereignalmida/billarr.git
-   cd billarr
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/sovereignalmida/billarr.git
+cd billarr
 
-2. **Start the application**
-   ```bash
-   chmod +x start.sh
-   ./start.sh
-   ```
-   
-   Or manually:
-   ```bash
-   docker compose up -d --build
-   ```
+# Start the application
+docker compose up -d
 
-3. **Access Billarr**
-   
-   Open your browser to: **http://localhost:8080**
+# Access Billarr at http://localhost:8080
+```
 
 That's it! 🎉
 
----
-
-## 📚 Setup Guides
-
-### 📱 Telegram Notifications (5 minutes)
-
-Get instant bill reminders on your phone!
-
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. Send `/newbot` and follow prompts
-3. Get your bot token
-4. Message [@userinfobot](https://t.me/userinfobot) to get your Chat ID
-5. **Start your bot** (send `/start` to it)
-6. Enter credentials in Billarr Settings
-7. Test with the "Test Now" button!
-
-**📖 Full Guide:** [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)
-
-### 📅 Google Calendar Sync (10 minutes)
-
-Automatically create calendar events for your bills!
-
-1. Create a Google Cloud project
-2. Enable Calendar API
-3. Create service account credentials
-4. Share your calendar with the service account
-5. Download credentials JSON
-6. Copy to `./data/google-credentials.json`
-7. Restart and enable in settings
-
-**📖 Full Guide:** [GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)
-
-### 🔔 All About Notifications
-
-**📖 Master Guide:** [NOTIFICATIONS.md](NOTIFICATIONS.md)
+### First Steps
+1. Create your first bill
+2. Set up notifications (optional but recommended)
+   - [Telegram Setup Guide](TELEGRAM_SETUP.md) - 5 minutes
+   - [Google Calendar Guide](GOOGLE_CALENDAR_SETUP.md) - 10 minutes
+3. Configure reminder preferences
+4. Never miss a payment again!
 
 ---
 
-## 🛠️ Configuration
+## 📚 Documentation
 
-### Environment Variables
+- **[README.md](README.md)** - Full user guide with all features
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment & advanced configuration
+- **[NOTIFICATIONS.md](NOTIFICATIONS.md)** - Complete notification setup guide
+- **[TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)** - Telegram bot configuration
+- **[GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)** - Google Calendar integration
+- **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** - Technical overview & architecture
 
-Create a `.env` file or modify `docker-compose.yml`:
+---
 
-```yaml
-# Backend
-PORT=3001
-DB_PATH=/app/data/bills.db
-GOOGLE_CREDENTIALS_PATH=/app/data/google-credentials.json
-GOOGLE_CALENDAR_ID=primary
+## 📱 Screenshots
 
-# Frontend
-REACT_APP_API_URL=http://localhost:8080
-```
+<div align="center">
+
+### Calendar View
+*Visualize all your bills by due date with color-coded status*
+
+### Bill Details
+*Comprehensive bill information at your fingertips*
+
+### Mobile Responsive
+*Works beautifully on any device*
+
+</div>
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React 18, Modern CSS, Responsive Design
+- **Backend**: Node.js, Express, SQLite3
+- **Notifications**: Telegram Bot API, Google Calendar API
+- **Deployment**: Docker, Docker Compose, Nginx
+- **Design**: Custom UI with Fraunces & Manrope fonts
+
+---
+
+## 🎨 Configuration
 
 ### Ports
+- Frontend: `http://localhost:8080`
+- Backend API: `http://localhost:3001`
 
-Default ports:
-- **Frontend:** http://localhost:8080
-- **Backend API:** http://localhost:3001
+### Environment Variables
+Customize in `docker-compose.yml`:
+```yaml
+environment:
+  - PORT=3001
+  - DB_PATH=/app/data/bills.db
+  - GOOGLE_CALENDAR_ID=primary
+```
 
-To change ports, edit `docker-compose.yml`
+### Data Persistence
+All data stored in `./data` directory - automatically backed up with your regular backups!
 
 ---
 
-## 💾 Data & Backups
+## 🔔 Setting Up Notifications
 
-### Data Location
+### Telegram (Recommended - 5 minutes)
+1. Message @BotFather on Telegram → `/newbot`
+2. Get bot token and chat ID
+3. Enter in Billarr settings
+4. Done! 🎉
 
-All data is stored in the `./data` directory:
-- `bills.db` - SQLite database with bills and settings
-- `google-credentials.json` - Google Calendar credentials (optional)
-- `google-token.json` - Google OAuth token (optional)
+**Full guide:** [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)
 
-### Backup
+### Google Calendar (10 minutes)
+1. Create Google Cloud project
+2. Enable Calendar API
+3. Create service account
+4. Share calendar with service account
+5. Add credentials to `./data/google-credentials.json`
 
-Simple backup:
-```bash
-cp -r ./data ./data-backup-$(date +%Y%m%d)
-```
-
-Automated daily backup:
-```bash
-# Add to crontab
-0 2 * * * /path/to/billarr/backup.sh
-```
-
-**📖 Full Guide:** [DEPLOYMENT.md](DEPLOYMENT.md)
-
----
-
-## 🔧 Development
-
-### Running Locally (without Docker)
-
-**Backend:**
-```bash
-cd backend
-npm install
-npm start
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm start
-```
-
-Frontend: http://localhost:3000  
-Backend: http://localhost:3001
-
-### Tech Stack
-
-- **Frontend:** React 18, Modern CSS
-- **Backend:** Node.js, Express.js
-- **Database:** SQLite3
-- **Notifications:** Telegram Bot API, Google Calendar API
-- **Deployment:** Docker, Nginx
+**Full guide:** [GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)
 
 ---
 
@@ -221,44 +179,49 @@ Backend: http://localhost:3001
 
 Contributions are welcome! Here's how you can help:
 
-1. 🐛 **Report bugs** - Open an issue
-2. 💡 **Suggest features** - Share your ideas
-3. 📝 **Improve docs** - Fix typos, add examples
-4. 🔨 **Submit PRs** - Fix bugs, add features
+- 🐛 Report bugs
+- 💡 Suggest new features
+- 📖 Improve documentation
+- 🔧 Submit pull requests
 
-### Development Roadmap
-
-- [ ] Email notifications
-- [ ] WhatsApp integration (via Twilio)
-- [ ] Export to CSV/PDF
-- [ ] Budget tracking
-- [ ] Bill splitting
-- [ ] Dark mode
-- [ ] Multi-user support
-- [ ] Payment history charts
-- [ ] Bill categories auto-complete
-- [ ] Receipt attachments
+Please open an issue first to discuss major changes.
 
 ---
 
-## 📄 License
+## 📋 Roadmap
 
-This project is open source and available under the [MIT License](LICENSE).
+- [ ] Email notifications
+- [ ] WhatsApp integration
+- [ ] Multi-user support
+- [ ] Budget tracking
+- [ ] Bill splitting
+- [ ] Payment history charts
+- [ ] CSV import/export
+- [ ] Dark mode
+- [ ] Mobile app (PWA)
+- [ ] API webhooks
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Inspired by the *arr stack ecosystem (Sonarr, Radarr, etc.)
-- Built with modern web technologies
-- Community-driven development
+- Inspired by the amazing \*arr ecosystem
+- Built for the self-hosted community
+- Logo created with AI assistance
 
 ---
 
-## ⚓ Stay Connected
+## 📄 License
 
-- **Issues:** [GitHub Issues](https://github.com/sovereignalmida/billarr/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/sovereignalmida/billarr/discussions)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 💬 Support
+
+- **Issues**: [GitHub Issues](https://github.com/sovereignalmida/billarr/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/sovereignalmida/billarr/discussions)
+- **Documentation**: Check the guides in this repo
 
 ---
 
@@ -266,8 +229,8 @@ This project is open source and available under the [MIT License](LICENSE).
 
 **Made with ❤️ for the self-hosted community**
 
-🏴‍☠️ **Never walk the plank of late fees!** 🏴‍☠️
+⚓ *Hoist the sails on your finances* 🏴‍☠️
 
-[⬆ Back to Top](#billarr)
+[⬆ Back to Top](#-billarr)
 
 </div>
