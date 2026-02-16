@@ -12,7 +12,7 @@
   align-items: center;
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--color-bg);
 }
 
 .calendar-title {
@@ -76,11 +76,28 @@
 }
 
 .calendar-day.empty {
-  background: #f8fafc;
+  opacity: 0.4;
 }
 
 .calendar-day.today {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  position: relative;
+}
+
+.calendar-day.today::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-primary);
+  opacity: 0.08;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .calendar-day.today::before {
+  opacity: 0.15;
 }
 
 .calendar-day.today .day-number {
@@ -89,8 +106,7 @@
 }
 
 .calendar-day.past:not(.today) {
-  background: #f8fafc;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .day-number {
@@ -113,7 +129,7 @@
 }
 
 .bill-indicator {
-  background: white;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-primary);
   padding: 0.375rem 0.5rem;
@@ -126,26 +142,36 @@
   gap: 0.125rem;
 }
 
+[data-theme="dark"] .bill-indicator {
+  background: #2d3e50;
+  border-color: #475569;
+}
+
 .bill-indicator:hover {
   transform: translateX(2px);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   border-left-width: 4px;
 }
 
 .bill-indicator.selected {
-  background: #eff6ff;
+  background: var(--color-primary);
   border-left-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.bill-indicator.selected .bill-vendor,
+.bill-indicator.selected .bill-amount {
+  color: white;
 }
 
 .bill-indicator.paid {
   border-left-color: var(--color-success);
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 .bill-indicator.overdue {
   border-left-color: var(--color-danger);
-  background: #fef2f2;
+  background: var(--color-overdue-bg);
 }
 
 .bill-vendor {

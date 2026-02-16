@@ -41,18 +41,18 @@
 }
 
 .status-banner.pending {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  border: 1px solid #fbbf24;
+  background: var(--color-pending-bg);
+  border: 1px solid var(--color-pending-border);
 }
 
 .status-banner.paid {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-  border: 1px solid #34d399;
+  background: var(--color-paid-bg);
+  border: 1px solid var(--color-paid-border);
 }
 
 .status-banner.overdue {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-  border: 1px solid #f87171;
+  background: var(--color-overdue-bg);
+  border: 1px solid var(--color-overdue-border);
 }
 
 .status-text {
@@ -62,15 +62,15 @@
 }
 
 .status-banner.pending .status-text {
-  color: #92400e;
+  color: var(--color-pending-text);
 }
 
 .status-banner.paid .status-text {
-  color: #065f46;
+  color: var(--color-paid-text);
 }
 
 .status-banner.overdue .status-text {
-  color: #991b1b;
+  color: var(--color-overdue-text);
 }
 
 .days-until {

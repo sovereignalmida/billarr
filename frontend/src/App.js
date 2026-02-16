@@ -12,12 +12,26 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
   const [view, setView] = useState('calendar');
+  const [theme, setTheme] = useState(() => {
+    // Get theme from localStorage or default to 'light'
+    return localStorage.getItem('billarr-theme') || 'light';
+  });
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+
+  // Apply theme on mount and when it changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('billarr-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     fetchBills();
   }, []);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
 
   const fetchBills = async () => {
     try {
@@ -103,6 +117,9 @@ function App() {
             </button>
             <button className="btn-primary" onClick={handleNewBill}>
               + New Bill
+            </button>
+            <button className="btn-theme-toggle" onClick={toggleTheme} title="Toggle theme">
+              {theme === 'light' ? '🌙' : '☀️'}
             </button>
             <button className="btn-settings" onClick={() => setShowSettings(true)}>
               ⚙️
