@@ -1,0 +1,28 @@
+{
+  "name": "billarr",
+  "version": "1.0.0",
+  "description": "Self-hosted bill tracking and reminder application for the *arr stack",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sovereignalmida/billarr.git"
+  },
+  "keywords": [
+    "bill-tracker",
+    "bill-reminder",
+    "self-hosted",
+    "docker",
+    "arr-stack",
+    "telegram-bot",
+    "google-calendar",
+    "personal-finance",
+    "expense-tracker",
+    "payment-reminder",
+    "homelab"
+  ],
+  "author": "Billarr Contributors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sovereignalmida/billarr/issues"
+  },
+  "homepage": "https://github.com/sovereignalmida/billarr#readme"
+}
