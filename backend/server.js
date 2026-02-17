@@ -44,6 +44,13 @@ db.serialize(() => {
     // Ignore error if column already exists
   });
 
+  // Add last_notified_at column if it doesn't exist (for existing databases)
+  db.run(`
+    ALTER TABLE bills ADD COLUMN last_notified_at DATETIME
+  `, (err) => {
+    // Ignore error if column already exists
+  });
+
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
