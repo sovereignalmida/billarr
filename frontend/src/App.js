@@ -17,7 +17,7 @@ function App() {
     return localStorage.getItem('billarr-theme') || 'light';
   });
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+  const API_URL = process.env.REACT_APP_API_URL || '';
 
   // Apply theme on mount and when it changes
   useEffect(() => {
