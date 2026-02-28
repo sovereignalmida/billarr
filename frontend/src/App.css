@@ -471,9 +471,40 @@ body {
   .bills-list {
     grid-template-columns: 1fr;
   }
-  
+
   .modal-content {
     margin: 1rem;
     max-height: calc(100vh - 2rem);
   }
+}
+
+/* Error banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--color-overdue-bg);
+  border-bottom: 1px solid var(--color-overdue-border);
+  color: var(--color-overdue-text);
+  padding: 0.75rem 2rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: fadeIn 0.2s ease;
+}
+
+.error-banner-close {
+  background: none;
+  border: none;
+  color: var(--color-overdue-text);
+  font-size: 1.25rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.error-banner-close:hover {
+  opacity: 0.7;
 }

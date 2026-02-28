@@ -7,7 +7,6 @@ const Settings = ({ onClose, apiUrl }) => {
     notification_method: 'none',
     telegram_chat_id: '',
     telegram_bot_token: '',
-    whatsapp_number: '',
     google_calendar_sync: 0
   });
   const [saved, setSaved] = useState(false);
@@ -37,11 +36,12 @@ const Settings = ({ onClose, apiUrl }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const { whatsapp_number, ...settingsToSave } = settings;
     try {
       await fetch(`${apiUrl}/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
+        body: JSON.stringify(settingsToSave)
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -71,12 +71,10 @@ const Settings = ({ onClose, apiUrl }) => {
               >
                 <option value="none">None</option>
                 <option value="telegram">Telegram</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="all">All Methods</option>
               </select>
             </div>
 
-            {(settings.notification_method === 'telegram' || settings.notification_method === 'all') && (
+            {settings.notification_method === 'telegram' && (
               <>
                 <div className="form-group">
                   <label>Telegram Bot Token</label>
@@ -102,20 +100,6 @@ const Settings = ({ onClose, apiUrl }) => {
                   <small>Use @userinfobot to get your chat ID</small>
                 </div>
               </>
-            )}
-
-            {(settings.notification_method === 'whatsapp' || settings.notification_method === 'all') && (
-              <div className="form-group">
-                <label>WhatsApp Number</label>
-                <input
-                  type="tel"
-                  name="whatsapp_number"
-                  value={settings.whatsapp_number || ''}
-                  onChange={handleChange}
-                  placeholder="+1234567890"
-                />
-                <small>Include country code (e.g., +1 for US)</small>
-              </div>
             )}
 
             <div className="form-group checkbox-group">
@@ -146,7 +130,7 @@ const Settings = ({ onClose, apiUrl }) => {
             </p>
           </div>
 
-          {(settings.notification_method === 'telegram' || settings.notification_method === 'all') && (
+          {settings.notification_method === 'telegram' && (
             <NotificationTest apiUrl={apiUrl} />
           )}
 

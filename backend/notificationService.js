@@ -23,16 +23,6 @@ class NotificationService {
   constructor(db) {
     this.db = db;
     this.checkInterval = null;
-    this.ensureSchema();
-  }
-
-  // Add last_notified_at column if it doesn't exist
-  ensureSchema() {
-    this.db.run(`
-      ALTER TABLE bills ADD COLUMN last_notified_at DATETIME
-    `, (err) => {
-      // Ignore error if column already exists
-    });
   }
 
   // Start the scheduler - checks every 30 minutes

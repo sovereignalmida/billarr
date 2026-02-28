@@ -1,9 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Calendar from './components/Calendar';
 import BillForm from './components/BillForm';
 import BillDetails from './components/BillDetails';
 import Settings from './components/Settings';
+import Login from './components/Login';
 import './App.css';
+
+// Fetch wrapper that injects auth header and surfaces errors
+function apiFetch(path, options = {}) {
+  const password = sessionStorage.getItem('billarr-auth');
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (password) headers['Authorization'] = 'Basic ' + btoa(':' + password);
+  return fetch(path, { ...options, headers }).then(async (res) => {
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const message = body.errors ? body.errors.join(', ') : (body.error || `HTTP ${res.status}`);
+      const err = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  });
+}
 
 function App() {
   const [bills, setBills] = useState([]);
@@ -12,68 +30,89 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
   const [view, setView] = useState('calendar');
+  const [error, setError] = useState(null);
+  const [authPassword, setAuthPassword] = useState(() => sessionStorage.getItem('billarr-auth'));
+  const [needsAuth, setNeedsAuth] = useState(false);
   const [theme, setTheme] = useState(() => {
-    // Get theme from localStorage or default to 'light'
     return localStorage.getItem('billarr-theme') || 'light';
   });
 
   const API_URL = process.env.REACT_APP_API_URL || '';
 
-  // Apply theme on mount and when it changes
+  const showError = useCallback((message) => {
+    setError(message);
+    setTimeout(() => setError(null), 5000);
+  }, []);
+
+  const handleAuthError = useCallback(() => {
+    sessionStorage.removeItem('billarr-auth');
+    setAuthPassword(null);
+    setNeedsAuth(true);
+  }, []);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('billarr-theme', theme);
   }, [theme]);
 
+  const fetchBills = useCallback(async () => {
+    try {
+      const data = await apiFetch(`${API_URL}/api/bills`);
+      setBills(data);
+      setNeedsAuth(false);
+    } catch (err) {
+      if (err.status === 401) {
+        handleAuthError();
+      } else {
+        showError(`Failed to load bills: ${err.message}`);
+      }
+    }
+  }, [API_URL, showError, handleAuthError]);
+
   useEffect(() => {
     fetchBills();
-  }, []);
+  }, [fetchBills, authPassword]);
 
   const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const fetchBills = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/bills`);
-      const data = await response.json();
-      setBills(data);
-    } catch (error) {
-      console.error('Error fetching bills:', error);
-    }
+  const handleLogin = (password) => {
+    setAuthPassword(password);
+    setNeedsAuth(false);
   };
 
   const handleSaveBill = async (billData) => {
     try {
-      const url = editingBill 
+      const url = editingBill
         ? `${API_URL}/api/bills/${editingBill.id}`
         : `${API_URL}/api/bills`;
-      
       const method = editingBill ? 'PUT' : 'POST';
-      
-      await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(billData)
-      });
-      
+      await apiFetch(url, { method, body: JSON.stringify(billData) });
       fetchBills();
       setShowForm(false);
       setEditingBill(null);
-    } catch (error) {
-      console.error('Error saving bill:', error);
+    } catch (err) {
+      if (err.status === 401) {
+        handleAuthError();
+      } else {
+        showError(`Failed to save bill: ${err.message}`);
+      }
     }
   };
 
   const handleDeleteBill = async (id) => {
     if (!window.confirm('Are you sure you want to delete this bill?')) return;
-    
     try {
-      await fetch(`${API_URL}/api/bills/${id}`, { method: 'DELETE' });
+      await apiFetch(`${API_URL}/api/bills/${id}`, { method: 'DELETE' });
       fetchBills();
       setSelectedBill(null);
-    } catch (error) {
-      console.error('Error deleting bill:', error);
+    } catch (err) {
+      if (err.status === 401) {
+        handleAuthError();
+      } else {
+        showError(`Failed to delete bill: ${err.message}`);
+      }
     }
   };
 
@@ -94,6 +133,10 @@ function App() {
     setSelectedBill(null);
   };
 
+  if (needsAuth) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -103,13 +146,13 @@ function App() {
             Billarr
           </h1>
           <div className="header-actions">
-            <button 
+            <button
               className={`view-toggle ${view === 'calendar' ? 'active' : ''}`}
               onClick={() => setView('calendar')}
             >
               Calendar
             </button>
-            <button 
+            <button
               className={`view-toggle ${view === 'list' ? 'active' : ''}`}
               onClick={() => setView('list')}
             >
@@ -128,10 +171,17 @@ function App() {
         </div>
       </header>
 
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button className="error-banner-close" onClick={() => setError(null)}>×</button>
+        </div>
+      )}
+
       <main className="app-main">
         {view === 'calendar' ? (
-          <Calendar 
-            bills={bills} 
+          <Calendar
+            bills={bills}
             onBillClick={handleBillClick}
             selectedBill={selectedBill}
           />
@@ -143,9 +193,9 @@ function App() {
               </div>
             ) : (
               <div className="bills-list">
-                {bills.map(bill => (
-                  <div 
-                    key={bill.id} 
+                {bills.map((bill) => (
+                  <div
+                    key={bill.id}
                     className={`bill-card ${selectedBill?.id === bill.id ? 'selected' : ''}`}
                     onClick={() => handleBillClick(bill)}
                   >
