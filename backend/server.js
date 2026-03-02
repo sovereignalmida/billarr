@@ -72,6 +72,19 @@ const MIGRATIONS = [
   {
     name: '003_add_last_notified_at',
     sql: [`ALTER TABLE bills ADD COLUMN last_notified_at DATETIME`]
+  },
+  {
+    name: '004_categories_table',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `INSERT OR IGNORE INTO categories (name) VALUES
+        ('utilities'),('rent'),('insurance'),('subscription'),
+        ('credit-card'),('loan'),('other')`
+    ]
   }
 ];
 
@@ -141,11 +154,10 @@ async function runMigrations() {
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
-const VALID_STATUSES   = ['pending', 'paid', 'overdue'];
-const VALID_RECURRING  = ['none', 'weekly', 'monthly', 'quarterly', 'annually'];
-const VALID_CATEGORIES = ['utilities', 'rent', 'insurance', 'subscription', 'credit-card', 'loan', 'other'];
+const VALID_STATUSES  = ['pending', 'paid', 'overdue'];
+const VALID_RECURRING = ['none', 'weekly', 'monthly', 'quarterly', 'annually'];
 
-function validateBill({ vendor, amount, due_date, reminder_days, status, recurring, category }) {
+function validateBill({ vendor, amount, due_date, reminder_days, status, recurring }) {
   const errors = [];
   if (!vendor || !String(vendor).trim()) {
     errors.push('vendor is required');
@@ -165,9 +177,6 @@ function validateBill({ vendor, amount, due_date, reminder_days, status, recurri
   }
   if (recurring && !VALID_RECURRING.includes(recurring)) {
     errors.push(`recurring must be one of: ${VALID_RECURRING.join(', ')}`);
-  }
-  if (category && !VALID_CATEGORIES.includes(category)) {
-    errors.push(`category must be one of: ${VALID_CATEGORIES.join(', ')}`);
   }
   return errors;
 }
@@ -324,6 +333,28 @@ app.put('/api/settings', (req, res) => {
   db.run(sql, [notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync], function (err) {
     if (err) { res.status(500).json({ error: err.message }); return; }
     res.json({ message: 'Settings updated successfully' });
+  });
+});
+
+// Get categories
+app.get('/api/categories', (req, res) => {
+  db.all('SELECT * FROM categories ORDER BY name ASC', [], (err, rows) => {
+    if (err) { res.status(500).json({ error: err.message }); return; }
+    res.json(rows);
+  });
+});
+
+// Create category
+app.post('/api/categories', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) { res.status(400).json({ error: 'Category name is required' }); return; }
+  db.run('INSERT INTO categories (name) VALUES (?)', [name], function (err) {
+    if (err) {
+      const status = err.message.includes('UNIQUE') ? 409 : 500;
+      res.status(status).json({ error: err.message });
+      return;
+    }
+    res.json({ id: this.lastID, name });
   });
 });
 

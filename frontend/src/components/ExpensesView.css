@@ -1,0 +1,308 @@
+.expenses-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* ── Header ── */
+.expenses-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+.expenses-title {
+  text-align: center;
+}
+
+.expenses-title h2 {
+  font-family: 'Fraunces', serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.expenses-year-total {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.year-nav-btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.year-nav-btn:hover {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+/* ── Month grid ── */
+.months-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.month-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.month-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+}
+
+.month-card.current {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.15);
+}
+
+.month-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.25);
+  background: var(--color-info-bg);
+}
+
+.month-card.has-projections {
+  border-style: dashed;
+}
+
+.month-card.empty {
+  opacity: 0.5;
+}
+
+.month-name {
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.month-card.current .month-name {
+  color: var(--color-primary);
+}
+
+.month-total {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.month-count {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Status bar ── */
+.month-status-bar {
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--color-border);
+  margin-top: 0.5rem;
+}
+
+.bar-paid {
+  background: var(--color-success);
+  transition: width 0.3s ease;
+}
+
+.bar-pending {
+  background: var(--color-warning);
+  transition: width 0.3s ease;
+}
+
+/* ── Drill-down ── */
+.drill-down {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: fadeIn 0.2s ease;
+}
+
+.drill-down-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.drill-down-header h3 {
+  font-family: 'Fraunces', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.drill-down-summary {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.ds-total  { color: var(--color-text); }
+.ds-paid   { color: var(--color-success); }
+.ds-pending { color: var(--color-warning); }
+
+.drill-empty {
+  padding: 2rem 1.5rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* ── Bill rows ── */
+.bill-rows {
+  padding: 0.5rem 0;
+}
+
+.bill-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.15s ease;
+}
+
+.bill-row:last-child {
+  border-bottom: none;
+}
+
+.bill-row:hover {
+  background: var(--color-bg);
+}
+
+.bill-row.projected {
+  opacity: 0.75;
+  border-left: 3px dashed var(--color-border);
+  padding-left: calc(1.5rem - 3px);
+}
+
+.bill-row-vendor {
+  font-weight: 600;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.proj-tilde {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.bill-row-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bill-row-category {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  padding: 0.15rem 0.6rem;
+}
+
+.bill-row-recurring {
+  font-size: 0.7rem;
+  color: var(--color-primary);
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: 100px;
+  padding: 0.15rem 0.6rem;
+}
+
+.bill-row-amount {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.bill-row-status {
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Projected status badge */
+.status-badge.projected {
+  background: var(--color-info-bg);
+  border: 1px dashed var(--color-info-border);
+  color: var(--color-text-muted);
+  padding: 0.25rem 0.75rem;
+  border-radius: 100px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .months-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .expenses-container {
+    padding: 1rem;
+  }
+
+  .months-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bill-row {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 0.5rem;
+  }
+
+  .bill-row-meta { grid-column: 1; }
+  .bill-row-status { grid-column: 2; grid-row: 1; }
+
+  .drill-down-summary {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}

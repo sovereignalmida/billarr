@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/apiFetch';
 import './BillForm.css';
 
 const BillForm = ({ bill, onSave, onCancel }) => {
@@ -14,6 +15,9 @@ const BillForm = ({ bill, onSave, onCancel }) => {
     reminder_days: 3,
     status: 'pending'
   });
+  const [categories, setCategories] = useState([]);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   useEffect(() => {
     if (bill) {
@@ -32,9 +36,59 @@ const BillForm = ({ bill, onSave, onCancel }) => {
     }
   }, [bill]);
 
+  useEffect(() => {
+    apiFetch('/api/categories')
+      .then(setCategories)
+      .catch(() => {
+        // Fallback to hardcoded defaults if categories API fails
+        setCategories([
+          { id: 'utilities', name: 'utilities' },
+          { id: 'rent', name: 'rent' },
+          { id: 'insurance', name: 'insurance' },
+          { id: 'subscription', name: 'subscription' },
+          { id: 'credit-card', name: 'credit-card' },
+          { id: 'loan', name: 'loan' },
+          { id: 'other', name: 'other' },
+        ]);
+      });
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'category' && value === '__new__') {
+      setAddingCategory(true);
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    try {
+      const created = await apiFetch('/api/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name })
+      });
+      setCategories(prev =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setFormData(prev => ({ ...prev, category: created.name }));
+      setAddingCategory(false);
+      setNewCategoryName('');
+    } catch (err) {
+      if (err.status === 409) {
+        // Already exists — just select it
+        setFormData(prev => ({ ...prev, category: name }));
+        setAddingCategory(false);
+        setNewCategoryName('');
+      }
+    }
+  };
+
+  const cancelAddCategory = () => {
+    setAddingCategory(false);
+    setNewCategoryName('');
   };
 
   const handleSubmit = (e) => {
@@ -93,16 +147,28 @@ const BillForm = ({ bill, onSave, onCancel }) => {
 
             <div className="form-group">
               <label>Category</label>
-              <select name="category" value={formData.category} onChange={handleChange}>
-                <option value="">Select category</option>
-                <option value="utilities">Utilities</option>
-                <option value="rent">Rent/Mortgage</option>
-                <option value="insurance">Insurance</option>
-                <option value="subscription">Subscription</option>
-                <option value="credit-card">Credit Card</option>
-                <option value="loan">Loan</option>
-                <option value="other">Other</option>
-              </select>
+              {!addingCategory ? (
+                <select name="category" value={formData.category} onChange={handleChange}>
+                  <option value="">Select category</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                  <option value="__new__">+ Add new category...</option>
+                </select>
+              ) : (
+                <div className="category-add-row">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}
+                    placeholder="New category name"
+                  />
+                  <button type="button" onClick={handleAddCategory}>Add</button>
+                  <button type="button" onClick={cancelAddCategory}>✕</button>
+                </div>
+              )}
             </div>
           </div>
 
