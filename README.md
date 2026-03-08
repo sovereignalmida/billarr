@@ -37,30 +37,38 @@ Billarr is a beautiful, self-hosted bill tracking and reminder application desig
 ## ✨ Features
 
 ### 📅 Bill Management
-- **Calendar View** - See all bills at a glance organized by due date
-- **List View** - Quick card-based overview of all your bills
-- **Detailed Tracking** - Store vendor, amount, due date, payment method, account info, and notes
-- **Categories** - Organize bills by type (utilities, rent, subscriptions, etc.)
-- **Recurring Bills** - Set weekly, monthly, quarterly, or annual recurring payments
-- **Status Tracking** - Mark bills as pending, paid, or overdue
+- **Calendar View** - See all bills at a glance with color-coded status; recurring bills projected into future months
+- **List View** - Filterable, sortable card view — filter by status, category, or payment method
+- **Expenses View** - Annual 12-month grid with recurring projections and CSV export
+- **Detailed Tracking** - Vendor, amount, due date, payment method, account info, and notes
+- **Categories** - Dynamic categories with inline create-new
+- **Payment Methods** - Dynamic dropdown with inline create-new
+- **Vendor Autocomplete** - Pick from past vendors or type a new one
+- **Recurring Bills** - Weekly, monthly, quarterly, or annual — auto-creates next bill on paid
+- **Status Tracking** - Pending, paid, overdue
 
 ### 🔔 Notifications
 - **📱 Telegram** - Instant push notifications to your phone
 - **📅 Google Calendar** - Auto-sync bills as calendar events with reminders
 - **🤖 Smart Scheduler** - Runs every hour, checks for bills in reminder window
-- **⚙️ Customizable** - Set reminder days per bill (3 days before, 1 week before, etc.)
+- **⚙️ Customizable** - Set reminder days per bill
+
+### 💾 Data Management
+- **Auto Backup** - JSON backup written before every database migration (in `./data/`)
+- **Manual Backup** - Download a JSON snapshot any time from Settings
+- **CSV Export** - Export all bills or an annual expenses view to CSV
+- **CSV Import** - Import bills from a Billarr-format CSV
 
 ### 🎨 Design
-- **Clean & Modern** - Thoughtful UI with Fraunces + Manrope typography
-- **Responsive** - Works beautifully on desktop, tablet, and mobile
-- **Dark Theme Ready** - Easy to customize colors
-- **Accessible** - WCAG compliant design
+- **Clean & Modern** - Fraunces + Manrope typography
+- **Dark Mode** - Toggle between light and dark themes
+- **Responsive** - Works on desktop, tablet, and mobile
 
 ### 🔧 Technical
 - **Self-Hosted** - Full control over your data
-- **SQLite Database** - Lightweight and portable
-- **Docker Ready** - Deploy in seconds
-- **RESTful API** - Clean backend architecture
+- **SQLite Database** - Lightweight, bind-mounted for easy backup
+- **Pre-built Docker Images** - Pull from `ghcr.io`, no local build needed
+- **RESTful API** - Clean Express backend
 - **No Tracking** - Zero analytics or third-party services
 
 ---
@@ -68,30 +76,70 @@ Billarr is a beautiful, self-hosted bill tracking and reminder application desig
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose installed
-- 5 minutes of your time
+- Docker and Docker Compose
 
-### Installation
+### Installation (pre-built images — recommended)
+
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  backend:
+    image: ghcr.io/sovereignalmida/billarr-backend:latest
+    container_name: billarr-backend
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/app/data/bills.db
+      # - BILLARR_PASSWORD=changeme   # uncomment to enable password protection
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/sovereignalmida/billarr-frontend:latest
+    container_name: billarr-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+```
+
+Then:
 
 ```bash
-# Clone the repository
-git clone https://github.com/sovereignalmida/billarr.git
-cd billarr
-
-# Start the application
+docker compose pull
 docker compose up -d
-
 # Access Billarr at http://localhost:8080
 ```
 
-That's it! 🎉
+That's it — no cloning, no building. 🎉
+
+### Updating
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Migrations run automatically on startup. Your data in `./data/` is always backed up to a timestamped JSON file before any schema change.
+
+### Alternative: build from source
+
+```bash
+git clone https://github.com/sovereignalmida/billarr.git
+cd billarr
+cp docker-compose.example.yml docker-compose.yml
+# Edit docker-compose.yml — swap image: lines for build: lines
+docker compose up -d --build
+```
 
 ### First Steps
 1. Create your first bill
-2. Set up notifications (optional but recommended)
-   - [Telegram Setup Guide](TELEGRAM_SETUP.md) - 5 minutes
-   - [Google Calendar Guide](GOOGLE_CALENDAR_SETUP.md) - 10 minutes
-3. Configure reminder preferences
+2. Set up notifications (optional)
+   - [Telegram Setup Guide](TELEGRAM_SETUP.md)
+   - [Google Calendar Guide](GOOGLE_CALENDAR_SETUP.md)
+3. Configure reminder preferences per bill
 4. Never miss a payment again!
 
 ---
@@ -141,16 +189,19 @@ That's it! 🎉
 - Backend API: `http://localhost:3001`
 
 ### Environment Variables
-Customize in `docker-compose.yml`:
-```yaml
-environment:
-  - PORT=3001
-  - DB_PATH=/app/data/bills.db
-  - GOOGLE_CALENDAR_ID=primary
-```
+
+| Variable | Default | Description |
+|---|---|---|
+| `BILLARR_PASSWORD` | *(unset)* | Enable password protection. Leave unset to disable auth. |
+| `PORT` | `3001` | Backend API port |
+| `DB_PATH` | `/app/data/bills.db` | SQLite database path inside container |
 
 ### Data Persistence
-All data stored in `./data` directory - automatically backed up with your regular backups!
+
+All data lives in `./data/` on the host — a bind mount, not a Docker volume. This means:
+- Data survives `docker compose down`, image updates, and even `docker system prune`
+- Pre-migration backups are written to `./data/bills-backup-{timestamp}.json` automatically
+- Manual backups available any time via **Settings → Data Management → Download Backup**
 
 ---
 
@@ -191,13 +242,9 @@ Please open an issue first to discuss major changes.
 ## 📋 Roadmap
 
 - [ ] Email notifications
-- [ ] WhatsApp integration
 - [ ] Multi-user support
-- [ ] Budget tracking
+- [ ] Budget tracking / spending charts
 - [ ] Bill splitting
-- [ ] Payment history charts
-- [ ] CSV import/export
-- [ ] Dark mode
 - [ ] Mobile app (PWA)
 - [ ] API webhooks
 
