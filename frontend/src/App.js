@@ -130,7 +130,7 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <div className="app-brand">
-            <img src="/logo.png" alt="Billarr" className="app-logo" />
+            <img src="/logolong.png" alt="Billarr" className="app-logo" />
           </div>
           <div className="header-actions">
             <button
