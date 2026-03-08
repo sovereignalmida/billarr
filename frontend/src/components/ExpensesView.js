@@ -1,22 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { MONTH_NAMES, advanceDate, fmt } from '../utils/dates';
 import './ExpensesView.css';
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-function advanceDate(d, recurring) {
-  const next = new Date(d);
-  switch (recurring) {
-    case 'weekly':    next.setDate(next.getDate() + 7);        break;
-    case 'monthly':   next.setMonth(next.getMonth() + 1);      break;
-    case 'quarterly': next.setMonth(next.getMonth() + 3);      break;
-    case 'annually':  next.setFullYear(next.getFullYear() + 1); break;
-    default: break;
-  }
-  return next;
-}
 
 function getYearOccurrences(dueDateStr, recurring, targetYear) {
   const results = [];
@@ -73,10 +57,6 @@ function buildMonthData(bills, targetYear) {
     const pending = all.filter(b => b.status !== 'paid').reduce((s, b) => s + parseFloat(b.amount || 0), 0);
     return { actual: m.actual, projected: m.projected, total, paid, pending };
   });
-}
-
-function fmt(amount) {
-  return '$' + parseFloat(amount || 0).toFixed(2);
 }
 
 const ExpensesView = ({ bills }) => {

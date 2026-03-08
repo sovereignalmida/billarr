@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import NotificationTest from './NotificationTest';
+import { apiFetch } from '../utils/apiFetch';
 import './Settings.css';
 
 const Settings = ({ onClose, apiUrl }) => {
@@ -10,22 +11,15 @@ const Settings = ({ onClose, apiUrl }) => {
     google_calendar_sync: 0
   });
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [importStatus, setImportStatus] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const response = await fetch(`${apiUrl}/api/settings`);
-      const data = await response.json();
-      setSettings(data);
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    }
-  };
+    apiFetch(`${apiUrl}/api/settings`)
+      .then(data => setSettings(data))
+      .catch(err => console.error('Error fetching settings:', err));
+  }, [apiUrl]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -34,21 +28,22 @@ const Settings = ({ onClose, apiUrl }) => {
       [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
     }));
     setSaved(false);
+    setSaveError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const { whatsapp_number, ...settingsToSave } = settings;
     try {
-      await fetch(`${apiUrl}/api/settings`, {
+      await apiFetch(`${apiUrl}/api/settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsToSave)
       });
       setSaved(true);
+      setSaveError(null);
       setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      console.error('Error saving settings:', error);
+    } catch (err) {
+      setSaveError(`Failed to save: ${err.message}`);
     }
   };
 
@@ -228,6 +223,7 @@ const Settings = ({ onClose, apiUrl }) => {
 
           <div className="form-actions">
             {saved && <span className="save-indicator">✓ Saved!</span>}
+            {saveError && <span className="save-error">{saveError}</span>}
             <button type="button" className="btn-secondary" onClick={onClose}>
               Close
             </button>

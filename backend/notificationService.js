@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const { getDaysUntilDue } = require('./utils/dates');
 
 /*
  * BILLARR SMART NOTIFICATION SCHEDULE
@@ -275,12 +276,7 @@ class NotificationService {
   }
 
   getDaysUntilDue(dueDate) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-    const diffTime = due - today;
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return getDaysUntilDue(dueDate);
   }
 }
 

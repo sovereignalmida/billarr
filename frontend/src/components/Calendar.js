@@ -1,49 +1,29 @@
 import React, { useState, useMemo } from 'react';
+import { MONTH_NAMES, DAY_NAMES, advanceDate, fmt, pad2 } from '../utils/dates';
 import './Calendar.css';
-
-const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function padDate(n) {
-  return String(n).padStart(2, '0');
-}
-
-function advanceDate(dateStr, recurring) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  switch (recurring) {
-    case 'weekly':    dt.setDate(dt.getDate() + 7); break;
-    case 'monthly':   dt.setMonth(dt.getMonth() + 1); break;
-    case 'quarterly': dt.setMonth(dt.getMonth() + 3); break;
-    case 'annually':  dt.setFullYear(dt.getFullYear() + 1); break;
-    default: return null;
-  }
-  return `${dt.getFullYear()}-${padDate(dt.getMonth() + 1)}-${padDate(dt.getDate())}`;
-}
 
 // Returns projected (virtual) bill entries for the given year/month.
 // Only projects non-paid recurring bills forward from their due_date.
+// The 600-iteration cap prevents runaway loops for very old start dates.
 function buildProjectedBills(bills, year, month) {
-  const targetPrefix = `${year}-${padDate(month + 1)}-`;
   const realDates = new Set(bills.map(b => b.due_date));
   const projected = [];
 
   bills
     .filter(b => b.recurring && b.recurring !== 'none' && b.status !== 'paid')
     .forEach(bill => {
-      let cur = bill.due_date;
+      let cur = new Date(bill.due_date + 'T12:00:00');
       for (let i = 0; i < 600; i++) {
         const next = advanceDate(cur, bill.recurring);
         if (!next) break;
         cur = next;
-        const [cy, cm] = cur.split('-').map(Number);
-        if (cy > year || (cy === year && cm - 1 > month)) break;
-        if (cy === year && cm - 1 === month) {
-          if (!realDates.has(cur)) {
-            projected.push({ ...bill, due_date: cur, _projected: true, id: `proj-${bill.id}-${cur}` });
+        const cy = cur.getFullYear();
+        const cm = cur.getMonth();
+        if (cy > year || (cy === year && cm > month)) break;
+        if (cy === year && cm === month) {
+          const dateStr = `${cy}-${pad2(cm + 1)}-${pad2(cur.getDate())}`;
+          if (!realDates.has(dateStr)) {
+            projected.push({ ...bill, due_date: dateStr, _projected: true, id: `proj-${bill.id}-${dateStr}` });
           }
         }
       }
@@ -63,7 +43,7 @@ const Calendar = ({ bills, onBillClick, selectedBill }) => {
 
   const todayStr = (() => {
     const t = new Date();
-    return `${t.getFullYear()}-${padDate(t.getMonth() + 1)}-${padDate(t.getDate())}`;
+    return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`;
   })();
 
   const projectedBills = useMemo(
@@ -72,7 +52,7 @@ const Calendar = ({ bills, onBillClick, selectedBill }) => {
   );
 
   const getBillsForDay = (day) => {
-    const dateStr = `${year}-${padDate(month + 1)}-${padDate(day)}`;
+    const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
     const real = bills.filter(b => b.due_date === dateStr);
     const proj = projectedBills.filter(b => b.due_date === dateStr);
     return [...real, ...proj];
@@ -85,7 +65,7 @@ const Calendar = ({ bills, onBillClick, selectedBill }) => {
   }
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${year}-${padDate(month + 1)}-${padDate(day)}`;
+    const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
     const dayBills = getBillsForDay(day);
     const isToday = dateStr === todayStr;
     const isPast = dateStr < todayStr;
@@ -105,10 +85,10 @@ const Calendar = ({ bills, onBillClick, selectedBill }) => {
                 e.stopPropagation();
                 if (!bill._projected) onBillClick(bill);
               }}
-              title={`${bill.vendor} - $${parseFloat(bill.amount).toFixed(2)}${bill._projected ? ' (projected)' : ''}`}
+              title={`${bill.vendor} - ${fmt(bill.amount)}${bill._projected ? ' (projected)' : ''}`}
             >
               <span className="bill-vendor">{bill.vendor}</span>
-              <span className="bill-amount">${parseFloat(bill.amount).toFixed(2)}</span>
+              <span className="bill-amount">{fmt(bill.amount)}</span>
             </div>
           ))}
         </div>
@@ -120,7 +100,7 @@ const Calendar = ({ bills, onBillClick, selectedBill }) => {
     <div className="calendar-container">
       <div className="calendar-header">
         <button className="nav-btn" onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>‹</button>
-        <h2 className="calendar-title">{monthNames[month]} {year}</h2>
+        <h2 className="calendar-title">{MONTH_NAMES[month]} {year}</h2>
         <button className="nav-btn" onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>›</button>
       </div>
 
@@ -132,7 +112,7 @@ const Calendar = ({ bills, onBillClick, selectedBill }) => {
       </div>
 
       <div className="calendar-grid">
-        {dayNames.map(d => (
+        {DAY_NAMES.map(d => (
           <div key={d} className="calendar-day-name">{d}</div>
         ))}
         {calendarDays}

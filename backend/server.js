@@ -1,18 +1,40 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
-const bodyParser = require('body-parser');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const NotificationService = require('./notificationService');
 const GoogleCalendarService = require('./googleCalendarService');
+const BillService = require('./services/billService');
+const { dbGet, dbAll, dbRun } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
-app.use(bodyParser.json());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+  credentials: true,
+}));
+app.use(express.json());
+
+// Rate limiting — general API limit
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+// Stricter limit on the notification trigger (external API calls)
+const triggerLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  message: { error: 'Too many trigger requests' },
+});
+app.use('/api', apiLimiter);
 
 // Auth middleware — protect all /api routes when BILLARR_PASSWORD is set
 app.use('/api', (req, res, next) => {
@@ -23,7 +45,15 @@ app.use('/api', (req, res, next) => {
   const decoded = Buffer.from(b64, 'base64').toString();
   const colonIndex = decoded.indexOf(':');
   const pass = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
-  if (pass === password) return next();
+
+  // Constant-time comparison to prevent timing attacks
+  const passBuffer     = Buffer.from(pass);
+  const expectedBuffer = Buffer.from(password);
+  const match =
+    passBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(passBuffer, expectedBuffer);
+
+  if (match) return next();
   res.set('WWW-Authenticate', 'Basic realm="Billarr"');
   res.status(401).json({ error: 'Unauthorized' });
 });
@@ -141,17 +171,29 @@ async function runMigrations() {
   const dataDir = path.dirname(dbPath);
   await backupBills(dataDir);
 
+  let appliedCount = 0;
   for (const migration of pending) {
     console.log(`  Applying migration: ${migration.name}`);
+    let failed = false;
     for (const sql of migration.sql) {
       await new Promise((resolve) => {
         db.run(sql, (err) => {
-          if (err && !err.message.includes('duplicate column')) {
-            console.warn(`  Warning in ${migration.name}: ${err.message}`);
+          if (err) {
+            if (err.message.includes('duplicate column')) {
+              // Idempotent — column already exists, not a real failure
+            } else {
+              console.error(`  ❌ Failed in ${migration.name}: ${err.message}`);
+              failed = true;
+            }
           }
           resolve();
         });
       });
+      if (failed) break;
+    }
+    if (failed) {
+      console.error(`  Skipping migration record for ${migration.name} — will retry on next start`);
+      continue;
     }
     await new Promise((resolve, reject) => {
       db.run(
@@ -160,219 +202,119 @@ async function runMigrations() {
         (err) => (err ? reject(err) : resolve())
       );
     });
+    appliedCount++;
   }
-  console.log(`✅ Applied ${pending.length} migration(s)`);
+  console.log(`✅ Applied ${appliedCount} of ${pending.length} pending migration(s)`);
 }
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// ─── Services (initialised in main(), used by routes) ─────────────────────────
 
-const VALID_STATUSES  = ['pending', 'paid', 'overdue'];
-const VALID_RECURRING = ['none', 'weekly', 'monthly', 'quarterly', 'annually'];
-
-function validateBill({ vendor, amount, due_date, reminder_days, status, recurring }) {
-  const errors = [];
-  if (!vendor || !String(vendor).trim()) {
-    errors.push('vendor is required');
-  }
-  if (amount === undefined || amount === null || isNaN(Number(amount)) || Number(amount) <= 0) {
-    errors.push('amount must be a positive number');
-  }
-  if (!due_date || isNaN(Date.parse(due_date))) {
-    errors.push('due_date must be a valid date');
-  }
-  if (reminder_days !== undefined && reminder_days !== null) {
-    const rd = Number(reminder_days);
-    if (isNaN(rd) || rd < 0 || rd > 30) errors.push('reminder_days must be between 0 and 30');
-  }
-  if (status && !VALID_STATUSES.includes(status)) {
-    errors.push(`status must be one of: ${VALID_STATUSES.join(', ')}`);
-  }
-  if (recurring && !VALID_RECURRING.includes(recurring)) {
-    errors.push(`recurring must be one of: ${VALID_RECURRING.join(', ')}`);
-  }
-  return errors;
-}
-
-// ─── Recurring bill helper ────────────────────────────────────────────────────
-
-function nextDueDate(dueDateStr, recurring) {
-  const d = new Date(dueDateStr);
-  switch (recurring) {
-    case 'weekly':    d.setDate(d.getDate() + 7);       break;
-    case 'monthly':   d.setMonth(d.getMonth() + 1);     break;
-    case 'quarterly': d.setMonth(d.getMonth() + 3);     break;
-    case 'annually':  d.setFullYear(d.getFullYear() + 1); break;
-    default: return null;
-  }
-  return d.toISOString().split('T')[0]; // YYYY-MM-DD
-}
+let billService;
+let notificationService;
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 
-// Get all bills
-app.get('/api/bills', (req, res) => {
-  db.all('SELECT * FROM bills ORDER BY due_date ASC', [], (err, rows) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    res.json(rows);
-  });
+// CSV helper shared by export and import
+function parseCSVLine(line) {
+  const fields = [];
+  let cur = '', inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else { cur += ch; }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === ',') { fields.push(cur); cur = ''; }
+      else { cur += ch; }
+    }
+  }
+  fields.push(cur);
+  return fields;
+}
+
+function escapeCSV(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Bills ───────────────────────────────────────────────────────────────────────
+
+app.get('/api/bills', async (req, res) => {
+  try {
+    res.json(await billService.getAll());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Export bills as CSV
-app.get('/api/bills/export', (req, res) => {
-  db.all('SELECT * FROM bills ORDER BY due_date ASC', [], (err, rows) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
+app.get('/api/bills/export', async (req, res) => {
+  try {
+    const rows = await billService.getAll();
     const cols = ['id','vendor','amount','due_date','account_info','payment_method','category','notes','recurring','reminder_days','status','created_at'];
-    const escape = (v) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v);
-      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const csv = [cols.join(','), ...rows.map(r => cols.map(c => escape(r[c])).join(','))].join('\n');
+    const csv = [cols.join(','), ...rows.map(r => cols.map(c => escapeCSV(r[c])).join(','))].join('\n');
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="billarr-export.csv"');
     res.send(csv);
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Get single bill
-app.get('/api/bills/:id', (req, res) => {
-  db.get('SELECT * FROM bills WHERE id = ?', [req.params.id], (err, row) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    if (!row) { res.status(404).json({ error: 'Bill not found' }); return; }
-    res.json(row);
-  });
+app.get('/api/bills/:id', async (req, res) => {
+  try {
+    const bill = await billService.getById(req.params.id);
+    if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    res.json(bill);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Create bill
 app.post('/api/bills', async (req, res) => {
-  const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days } = req.body;
-
-  const errors = validateBill(req.body);
-  if (errors.length > 0) { res.status(400).json({ errors }); return; }
-
-  const sql = `INSERT INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
-  db.run(
-    sql,
-    [vendor, amount, due_date, account_info, payment_method, category, notes, recurring || 'none', reminder_days || 3],
-    async function (err) {
-      if (err) { res.status(500).json({ error: err.message }); return; }
-
-      const billId = this.lastID;
-      const bill = { id: billId, vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status: 'pending' };
-      const eventId = await googleCalendarService.syncBill(bill, 'create');
-      if (eventId) {
-        db.run('UPDATE bills SET calendar_event_id = ? WHERE id = ?', [eventId, billId]);
-      }
-
-      res.json({ id: billId, message: 'Bill created successfully' });
-    }
-  );
+  const errors = billService.validate(req.body);
+  if (errors.length > 0) return res.status(400).json({ errors });
+  try {
+    const result = await billService.create(req.body);
+    res.json({ ...result, message: 'Bill created successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Update bill
 app.put('/api/bills/:id', async (req, res) => {
-  const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status } = req.body;
-
-  const errors = validateBill(req.body);
-  if (errors.length > 0) { res.status(400).json({ errors }); return; }
-
-  db.get('SELECT * FROM bills WHERE id = ?', [req.params.id], async (err, existingBill) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    if (!existingBill) { res.status(404).json({ error: 'Bill not found' }); return; }
-
-    const sql = `UPDATE bills SET vendor = ?, amount = ?, due_date = ?, account_info = ?,
-                 payment_method = ?, category = ?, notes = ?, recurring = ?, reminder_days = ?, status = ?
-                 WHERE id = ?`;
-
-    db.run(
-      sql,
-      [vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status, req.params.id],
-      async function (err) {
-        if (err) { res.status(500).json({ error: err.message }); return; }
-
-        // Sync with Google Calendar
-        const updatedBill = {
-          id: req.params.id, vendor, amount, due_date, account_info, payment_method,
-          category, notes, recurring, reminder_days, status,
-          calendar_event_id: existingBill.calendar_event_id
-        };
-        const eventId = await googleCalendarService.syncBill(updatedBill, 'update');
-        if (eventId && !existingBill.calendar_event_id) {
-          db.run('UPDATE bills SET calendar_event_id = ? WHERE id = ?', [eventId, req.params.id]);
-        }
-
-        // Auto-create next bill for recurring bills when marked paid
-        let nextBillCreated = false;
-        const wasJustPaid = status === 'paid' && existingBill.status !== 'paid';
-        if (wasJustPaid && recurring && recurring !== 'none') {
-          const newDue = nextDueDate(due_date, recurring);
-          if (newDue) {
-            db.run(
-              `INSERT INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [vendor, amount, newDue, account_info, payment_method, category, notes, recurring, reminder_days || 3],
-              function (insertErr) {
-                if (!insertErr) {
-                  console.log(`🔄 Auto-created next ${recurring} bill for ${vendor} due ${newDue}`);
-                }
-              }
-            );
-            nextBillCreated = true;
-          }
-        }
-
-        res.json({ message: 'Bill updated successfully', changes: this.changes, nextBillCreated });
-      }
-    );
-  });
+  const errors = billService.validate(req.body);
+  if (errors.length > 0) return res.status(400).json({ errors });
+  try {
+    const existing = await billService.getById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Bill not found' });
+    const result = await billService.update(req.params.id, req.body, existing);
+    res.json({ message: 'Bill updated successfully', ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Delete bill
-app.delete('/api/bills/:id', (req, res) => {
-  db.get('SELECT * FROM bills WHERE id = ?', [req.params.id], async (err, bill) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    if (bill) {
-      await googleCalendarService.syncBill(bill, 'delete');
-    }
-    db.run('DELETE FROM bills WHERE id = ?', [req.params.id], function (err) {
-      if (err) { res.status(500).json({ error: err.message }); return; }
-      res.json({ message: 'Bill deleted successfully', changes: this.changes });
-    });
-  });
+app.delete('/api/bills/:id', async (req, res) => {
+  try {
+    const result = await billService.delete(req.params.id);
+    res.json({ message: 'Bill deleted successfully', ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Import bills from CSV
-app.post('/api/bills/import', bodyParser.text({ type: ['text/csv', 'text/plain'], limit: '10mb' }), (req, res) => {
+app.post('/api/bills/import', express.text({ type: ['text/csv', 'text/plain'], limit: '10mb' }), async (req, res) => {
   const text = req.body;
-  if (!text || !text.trim()) { res.status(400).json({ error: 'Empty CSV body' }); return; }
-
-  const parseCSVLine = (line) => {
-    const fields = [];
-    let cur = '', inQuote = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (inQuote) {
-        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-        else if (ch === '"') { inQuote = false; }
-        else { cur += ch; }
-      } else {
-        if (ch === '"') { inQuote = true; }
-        else if (ch === ',') { fields.push(cur); cur = ''; }
-        else { cur += ch; }
-      }
-    }
-    fields.push(cur);
-    return fields;
-  };
+  if (!text || !text.trim()) return res.status(400).json({ error: 'Empty CSV body' });
 
   const lines = text.trim().split('\n').map(l => l.trimEnd());
   const header = parseCSVLine(lines[0]).map(h => h.trim());
   const expected = ['id','vendor','amount','due_date','account_info','payment_method','category','notes','recurring','reminder_days','status','created_at'];
   if (!expected.every(col => header.includes(col))) {
-    res.status(400).json({ error: 'CSV header does not match expected format. Export a CSV from Billarr to get the correct format.' });
-    return;
+    return res.status(400).json({ error: 'CSV header does not match expected format. Export a CSV from Billarr to get the correct format.' });
   }
 
   const rows = lines.slice(1).filter(l => l.trim()).map(l => {
@@ -380,142 +322,132 @@ app.post('/api/bills/import', bodyParser.text({ type: ['text/csv', 'text/plain']
     return Object.fromEntries(header.map((h, i) => [h, vals[i] ?? '']));
   });
 
-  let imported = 0, skipped = 0;
-  const stmt = db.prepare(
-    `INSERT OR IGNORE INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  rows.forEach(r => {
-    const errors = validateBill(r);
-    if (errors.length > 0) { skipped++; return; }
-    stmt.run(
-      r.vendor, Number(r.amount), r.due_date, r.account_info || null,
-      r.payment_method || null, r.category || null, r.notes || null,
-      r.recurring || 'none', Number(r.reminder_days) || 3,
-      r.status || 'pending', r.created_at || null,
-      (err) => { if (err) skipped++; else imported++; }
-    );
-  });
-  stmt.finalize(() => {
-    res.json({ message: `Import complete`, imported, skipped });
-  });
+  try {
+    const result = await billService.importRows(rows);
+    res.json({ message: 'Import complete', ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Manual backup download
-app.get('/api/backup', (req, res) => {
-  db.all('SELECT * FROM bills', [], (err, rows) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
+// Backup / misc ───────────────────────────────────────────────────────────────
+
+app.get('/api/backup', async (req, res) => {
+  try {
+    const rows = await dbAll(db, 'SELECT * FROM bills');
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="billarr-backup-${ts}.json"`);
     res.send(JSON.stringify(rows, null, 2));
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Get payment methods
-app.get('/api/payment-methods', (req, res) => {
-  db.all('SELECT * FROM payment_methods ORDER BY name ASC', [], (err, rows) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    res.json(rows);
-  });
-});
-
-// Create payment method
-app.post('/api/payment-methods', (req, res) => {
-  const name = String(req.body.name || '').trim();
-  if (!name) { res.status(400).json({ error: 'Payment method name is required' }); return; }
-  db.run('INSERT INTO payment_methods (name) VALUES (?)', [name], function (err) {
-    if (err) {
-      const status = err.message.includes('UNIQUE') ? 409 : 500;
-      res.status(status).json({ error: err.message });
-      return;
-    }
-    res.json({ id: this.lastID, name });
-  });
-});
-
-// Get distinct vendors (for autocomplete)
-app.get('/api/vendors', (req, res) => {
-  db.all('SELECT DISTINCT vendor FROM bills ORDER BY vendor ASC', [], (err, rows) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
+app.get('/api/vendors', async (req, res) => {
+  try {
+    const rows = await dbAll(db, 'SELECT DISTINCT vendor FROM bills ORDER BY vendor ASC');
     res.json(rows.map(r => r.vendor));
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Get settings
-app.get('/api/settings', (req, res) => {
-  db.get('SELECT * FROM settings WHERE id = 1', [], (err, row) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    res.json(row || {});
-  });
+// Payment methods ─────────────────────────────────────────────────────────────
+
+app.get('/api/payment-methods', async (req, res) => {
+  try {
+    res.json(await dbAll(db, 'SELECT * FROM payment_methods ORDER BY name ASC'));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Update settings
-app.put('/api/settings', (req, res) => {
-  const { notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync } = req.body;
-
-  const sql = `UPDATE settings SET notification_method = ?, telegram_chat_id = ?,
-               telegram_bot_token = ?, google_calendar_sync = ?
-               WHERE id = 1`;
-
-  db.run(sql, [notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync], function (err) {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    res.json({ message: 'Settings updated successfully' });
-  });
-});
-
-// Get categories
-app.get('/api/categories', (req, res) => {
-  db.all('SELECT * FROM categories ORDER BY name ASC', [], (err, rows) => {
-    if (err) { res.status(500).json({ error: err.message }); return; }
-    res.json(rows);
-  });
-});
-
-// Create category
-app.post('/api/categories', (req, res) => {
+app.post('/api/payment-methods', async (req, res) => {
   const name = String(req.body.name || '').trim();
-  if (!name) { res.status(400).json({ error: 'Category name is required' }); return; }
-  db.run('INSERT INTO categories (name) VALUES (?)', [name], function (err) {
-    if (err) {
-      const status = err.message.includes('UNIQUE') ? 409 : 500;
-      res.status(status).json({ error: err.message });
-      return;
-    }
-    res.json({ id: this.lastID, name });
-  });
+  if (!name) return res.status(400).json({ error: 'Payment method name is required' });
+  try {
+    const { lastID } = await dbRun(db, 'INSERT INTO payment_methods (name) VALUES (?)', [name]);
+    res.json({ id: lastID, name });
+  } catch (err) {
+    res.status(err.message.includes('UNIQUE') ? 409 : 500).json({ error: err.message });
+  }
 });
 
-// Health check (no auth required)
+// Categories ──────────────────────────────────────────────────────────────────
+
+app.get('/api/categories', async (req, res) => {
+  try {
+    res.json(await dbAll(db, 'SELECT * FROM categories ORDER BY name ASC'));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/categories', async (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Category name is required' });
+  try {
+    const { lastID } = await dbRun(db, 'INSERT INTO categories (name) VALUES (?)', [name]);
+    res.json({ id: lastID, name });
+  } catch (err) {
+    res.status(err.message.includes('UNIQUE') ? 409 : 500).json({ error: err.message });
+  }
+});
+
+// Settings ────────────────────────────────────────────────────────────────────
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    res.json(await dbGet(db, 'SELECT * FROM settings WHERE id = 1') || {});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  const { notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync } = req.body;
+  try {
+    await dbRun(
+      db,
+      `UPDATE settings SET notification_method = ?, telegram_chat_id = ?,
+       telegram_bot_token = ?, google_calendar_sync = ? WHERE id = 1`,
+      [notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync]
+    );
+    res.json({ message: 'Settings updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Health / notifications ──────────────────────────────────────────────────────
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Manual notification trigger (for testing)
-app.post('/api/notifications/trigger', async (req, res) => {
+app.post('/api/notifications/trigger', triggerLimiter, async (req, res) => {
   try {
     await notificationService.checkAndNotify();
     res.json({ message: 'Notification check triggered' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
-let notificationService;
-let googleCalendarService;
-
 async function main() {
   await runMigrations();
 
-  notificationService = new NotificationService(db);
-  googleCalendarService = new GoogleCalendarService(db);
-
-  notificationService.start();
-  googleCalendarService.initialize().catch(() => {
+  const googleCalendarService = new GoogleCalendarService(db);
+  await googleCalendarService.initialize().catch(() => {
     console.log('ℹ️  Google Calendar will remain disabled');
   });
+
+  billService        = new BillService(db, googleCalendarService);
+  notificationService = new NotificationService(db);
+  notificationService.start();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`⚓ Billarr API running on port ${PORT}`);

@@ -1,25 +1,9 @@
 import React from 'react';
+import { getDaysUntilDue, formatDueDate, fmt } from '../utils/dates';
 import './BillDetails.css';
 
 const BillDetails = ({ bill, onClose, onEdit, onDelete }) => {
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const getDaysUntilDue = () => {
-    const today = new Date();
-    const dueDate = new Date(bill.due_date);
-    const diffTime = dueDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const daysUntil = getDaysUntilDue();
+  const daysUntil = getDaysUntilDue(bill.due_date);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -32,7 +16,7 @@ const BillDetails = ({ bill, onClose, onEdit, onDelete }) => {
         <div className="details-content">
           <div className="detail-header">
             <h3 className="vendor-name">{bill.vendor}</h3>
-            <div className="amount-display">${parseFloat(bill.amount).toFixed(2)}</div>
+            <div className="amount-display">{fmt(bill.amount)}</div>
           </div>
 
           <div className={`status-banner ${bill.status}`}>
@@ -52,7 +36,7 @@ const BillDetails = ({ bill, onClose, onEdit, onDelete }) => {
           <div className="detail-grid">
             <div className="detail-item">
               <label>Due Date</label>
-              <p>{formatDate(bill.due_date)}</p>
+              <p>{formatDueDate(bill.due_date)}</p>
             </div>
 
             {bill.category && (

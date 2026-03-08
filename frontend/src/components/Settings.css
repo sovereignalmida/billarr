@@ -153,6 +153,14 @@
   color: var(--color-primary);
 }
 
+.save-error {
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+}
+
 .save-indicator {
   color: var(--color-success);
   font-weight: 600;
