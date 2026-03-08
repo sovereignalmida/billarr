@@ -1,10 +1,12 @@
 services:
   backend:
-    build: ./backend
+    image: ghcr.io/sovereignalmida/billarr-backend:latest
+    # To build locally instead: comment out image above and uncomment:
+    # build: ./backend
     container_name: billarr-backend
     labels:
       - "com.billarr.description=Billarr Backend API"
-      - "com.billarr.version=1.0.0"
+      - "com.billarr.version=2.0.0"
     ports:
       - "3001:3001"
     volumes:
@@ -24,19 +26,15 @@ services:
       start_period: 5s
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/sovereignalmida/billarr-frontend:latest
+    # To build locally instead: comment out image above and uncomment:
+    # build: ./frontend
     container_name: billarr-frontend
     labels:
       - "com.billarr.description=Billarr Frontend Web Interface"
-      - "com.billarr.version=1.0.0"
+      - "com.billarr.version=2.0.0"
     ports:
       - "8080:80"
     depends_on:
       - backend
-    environment:
-      - REACT_APP_API_URL=http://localhost:8080
     restart: unless-stopped
-
-volumes:
-  data:
-    driver: local

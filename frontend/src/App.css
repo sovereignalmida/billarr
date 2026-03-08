@@ -118,19 +118,14 @@ body {
   gap: 2rem;
 }
 
-.app-title {
-  font-family: 'Fraunces', serif;
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--color-text);
+.app-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
 }
 
 .app-logo {
-  width: 2.5rem;
   height: 2.5rem;
+  width: auto;
   object-fit: contain;
 }
 
@@ -269,6 +264,41 @@ body {
 
 .list-view {
   width: 100%;
+}
+
+.list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-bottom: 1.25rem;
+}
+
+.list-filters select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.btn-clear-filters {
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-filters:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .empty-state {

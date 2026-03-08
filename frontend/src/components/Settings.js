@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import NotificationTest from './NotificationTest';
 import './Settings.css';
 
@@ -10,6 +10,8 @@ const Settings = ({ onClose, apiUrl }) => {
     google_calendar_sync: 0
   });
   const [saved, setSaved] = useState(false);
+  const [importStatus, setImportStatus] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchSettings();
@@ -50,6 +52,59 @@ const Settings = ({ onClose, apiUrl }) => {
     }
   };
 
+  const downloadFromApi = async (path, filename) => {
+    const password = sessionStorage.getItem('billarr-auth');
+    const headers = {};
+    if (password) headers['Authorization'] = 'Basic ' + btoa(':' + password);
+    const res = await fetch(`${apiUrl}${path}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBackup = async () => {
+    try {
+      const ts = new Date().toISOString().split('T')[0];
+      await downloadFromApi('/api/backup', `billarr-backup-${ts}.json`);
+    } catch (err) {
+      setImportStatus({ type: 'error', message: `Backup failed: ${err.message}` });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      await downloadFromApi('/api/bills/export', 'billarr-export.csv');
+    } catch (err) {
+      setImportStatus({ type: 'error', message: `Export failed: ${err.message}` });
+    }
+  };
+
+  const handleImportCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImportStatus({ type: 'loading', message: 'Importing...' });
+    try {
+      const text = await file.text();
+      const password = sessionStorage.getItem('billarr-auth');
+      const headers = { 'Content-Type': 'text/csv' };
+      if (password) headers['Authorization'] = 'Basic ' + btoa(':' + password);
+      const res = await fetch(`${apiUrl}/api/bills/import`, {
+        method: 'POST', headers, body: text
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setImportStatus({ type: 'success', message: `Imported ${data.imported} bills${data.skipped ? `, skipped ${data.skipped} invalid` : ''}.` });
+    } catch (err) {
+      setImportStatus({ type: 'error', message: `Import failed: ${err.message}` });
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content settings-modal" onClick={e => e.stopPropagation()}>
@@ -59,6 +114,43 @@ const Settings = ({ onClose, apiUrl }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="settings-form">
+          <div className="form-section">
+            <h3>Data Management</h3>
+            <div className="data-actions">
+              <div className="data-action-group">
+                <p className="data-action-label">Backup all bills as JSON</p>
+                <button type="button" className="btn-data-action" onClick={handleBackup}>
+                  Download Backup
+                </button>
+              </div>
+              <div className="data-action-group">
+                <p className="data-action-label">Export all bills to CSV</p>
+                <button type="button" className="btn-data-action" onClick={handleExportCSV}>
+                  Export CSV
+                </button>
+              </div>
+              <div className="data-action-group">
+                <p className="data-action-label">Import bills from CSV (Billarr format)</p>
+                <button type="button" className="btn-data-action" onClick={() => fileInputRef.current?.click()}>
+                  Import CSV
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  style={{ display: 'none' }}
+                  onChange={handleImportCSV}
+                />
+              </div>
+            </div>
+            {importStatus && (
+              <div className={`import-status import-status-${importStatus.type}`}>
+                {importStatus.message}
+                <button type="button" onClick={() => setImportStatus(null)}>×</button>
+              </div>
+            )}
+          </div>
+
           <div className="form-section">
             <h3>Notification Preferences</h3>
             

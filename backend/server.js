@@ -85,6 +85,18 @@ const MIGRATIONS = [
         ('utilities'),('rent'),('insurance'),('subscription'),
         ('credit-card'),('loan'),('other')`
     ]
+  },
+  {
+    name: '005_payment_methods_table',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS payment_methods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `INSERT OR IGNORE INTO payment_methods (name) VALUES
+        ('credit-card'),('debit-card'),('bank-transfer'),('cash'),('check'),('direct-debit'),('paypal')`
+    ]
   }
 ];
 
@@ -205,6 +217,23 @@ app.get('/api/bills', (req, res) => {
   });
 });
 
+// Export bills as CSV
+app.get('/api/bills/export', (req, res) => {
+  db.all('SELECT * FROM bills ORDER BY due_date ASC', [], (err, rows) => {
+    if (err) { res.status(500).json({ error: err.message }); return; }
+    const cols = ['id','vendor','amount','due_date','account_info','payment_method','category','notes','recurring','reminder_days','status','created_at'];
+    const escape = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [cols.join(','), ...rows.map(r => cols.map(c => escape(r[c])).join(','))].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="billarr-export.csv"');
+    res.send(csv);
+  });
+});
+
 // Get single bill
 app.get('/api/bills/:id', (req, res) => {
   db.get('SELECT * FROM bills WHERE id = ?', [req.params.id], (err, row) => {
@@ -311,6 +340,105 @@ app.delete('/api/bills/:id', (req, res) => {
       if (err) { res.status(500).json({ error: err.message }); return; }
       res.json({ message: 'Bill deleted successfully', changes: this.changes });
     });
+  });
+});
+
+// Import bills from CSV
+app.post('/api/bills/import', bodyParser.text({ type: ['text/csv', 'text/plain'], limit: '10mb' }), (req, res) => {
+  const text = req.body;
+  if (!text || !text.trim()) { res.status(400).json({ error: 'Empty CSV body' }); return; }
+
+  const parseCSVLine = (line) => {
+    const fields = [];
+    let cur = '', inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuote) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') { inQuote = false; }
+        else { cur += ch; }
+      } else {
+        if (ch === '"') { inQuote = true; }
+        else if (ch === ',') { fields.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+    }
+    fields.push(cur);
+    return fields;
+  };
+
+  const lines = text.trim().split('\n').map(l => l.trimEnd());
+  const header = parseCSVLine(lines[0]).map(h => h.trim());
+  const expected = ['id','vendor','amount','due_date','account_info','payment_method','category','notes','recurring','reminder_days','status','created_at'];
+  if (!expected.every(col => header.includes(col))) {
+    res.status(400).json({ error: 'CSV header does not match expected format. Export a CSV from Billarr to get the correct format.' });
+    return;
+  }
+
+  const rows = lines.slice(1).filter(l => l.trim()).map(l => {
+    const vals = parseCSVLine(l);
+    return Object.fromEntries(header.map((h, i) => [h, vals[i] ?? '']));
+  });
+
+  let imported = 0, skipped = 0;
+  const stmt = db.prepare(
+    `INSERT OR IGNORE INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  rows.forEach(r => {
+    const errors = validateBill(r);
+    if (errors.length > 0) { skipped++; return; }
+    stmt.run(
+      r.vendor, Number(r.amount), r.due_date, r.account_info || null,
+      r.payment_method || null, r.category || null, r.notes || null,
+      r.recurring || 'none', Number(r.reminder_days) || 3,
+      r.status || 'pending', r.created_at || null,
+      (err) => { if (err) skipped++; else imported++; }
+    );
+  });
+  stmt.finalize(() => {
+    res.json({ message: `Import complete`, imported, skipped });
+  });
+});
+
+// Manual backup download
+app.get('/api/backup', (req, res) => {
+  db.all('SELECT * FROM bills', [], (err, rows) => {
+    if (err) { res.status(500).json({ error: err.message }); return; }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="billarr-backup-${ts}.json"`);
+    res.send(JSON.stringify(rows, null, 2));
+  });
+});
+
+// Get payment methods
+app.get('/api/payment-methods', (req, res) => {
+  db.all('SELECT * FROM payment_methods ORDER BY name ASC', [], (err, rows) => {
+    if (err) { res.status(500).json({ error: err.message }); return; }
+    res.json(rows);
+  });
+});
+
+// Create payment method
+app.post('/api/payment-methods', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) { res.status(400).json({ error: 'Payment method name is required' }); return; }
+  db.run('INSERT INTO payment_methods (name) VALUES (?)', [name], function (err) {
+    if (err) {
+      const status = err.message.includes('UNIQUE') ? 409 : 500;
+      res.status(status).json({ error: err.message });
+      return;
+    }
+    res.json({ id: this.lastID, name });
+  });
+});
+
+// Get distinct vendors (for autocomplete)
+app.get('/api/vendors', (req, res) => {
+  db.all('SELECT DISTINCT vendor FROM bills ORDER BY vendor ASC', [], (err, rows) => {
+    if (err) { res.status(500).json({ error: err.message }); return; }
+    res.json(rows.map(r => r.vendor));
   });
 });
 

@@ -15,9 +15,16 @@ const BillForm = ({ bill, onSave, onCancel }) => {
     reminder_days: 3,
     status: 'pending'
   });
+
   const [categories, setCategories] = useState([]);
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [addingPaymentMethod, setAddingPaymentMethod] = useState(false);
+  const [newPaymentMethodName, setNewPaymentMethodName] = useState('');
+
+  const [vendors, setVendors] = useState([]);
 
   useEffect(() => {
     if (bill) {
@@ -40,7 +47,6 @@ const BillForm = ({ bill, onSave, onCancel }) => {
     apiFetch('/api/categories')
       .then(setCategories)
       .catch(() => {
-        // Fallback to hardcoded defaults if categories API fails
         setCategories([
           { id: 'utilities', name: 'utilities' },
           { id: 'rent', name: 'rent' },
@@ -51,12 +57,31 @@ const BillForm = ({ bill, onSave, onCancel }) => {
           { id: 'other', name: 'other' },
         ]);
       });
+
+    apiFetch('/api/payment-methods')
+      .then(setPaymentMethods)
+      .catch(() => {
+        setPaymentMethods([
+          { id: 'credit-card', name: 'credit-card' },
+          { id: 'debit-card', name: 'debit-card' },
+          { id: 'bank-transfer', name: 'bank-transfer' },
+          { id: 'cash', name: 'cash' },
+        ]);
+      });
+
+    apiFetch('/api/vendors')
+      .then(setVendors)
+      .catch(() => setVendors([]));
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'category' && value === '__new__') {
       setAddingCategory(true);
+      return;
+    }
+    if (name === 'payment_method' && value === '__new__') {
+      setAddingPaymentMethod(true);
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -70,25 +95,30 @@ const BillForm = ({ bill, onSave, onCancel }) => {
         method: 'POST',
         body: JSON.stringify({ name })
       });
-      setCategories(prev =>
-        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
-      );
+      setCategories(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       setFormData(prev => ({ ...prev, category: created.name }));
-      setAddingCategory(false);
-      setNewCategoryName('');
     } catch (err) {
-      if (err.status === 409) {
-        // Already exists — just select it
-        setFormData(prev => ({ ...prev, category: name }));
-        setAddingCategory(false);
-        setNewCategoryName('');
-      }
+      if (err.status === 409) setFormData(prev => ({ ...prev, category: name }));
     }
-  };
-
-  const cancelAddCategory = () => {
     setAddingCategory(false);
     setNewCategoryName('');
+  };
+
+  const handleAddPaymentMethod = async () => {
+    const name = newPaymentMethodName.trim();
+    if (!name) return;
+    try {
+      const created = await apiFetch('/api/payment-methods', {
+        method: 'POST',
+        body: JSON.stringify({ name })
+      });
+      setPaymentMethods(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setFormData(prev => ({ ...prev, payment_method: created.name }));
+    } catch (err) {
+      if (err.status === 409) setFormData(prev => ({ ...prev, payment_method: name }));
+    }
+    setAddingPaymentMethod(false);
+    setNewPaymentMethodName('');
   };
 
   const handleSubmit = (e) => {
@@ -115,7 +145,12 @@ const BillForm = ({ bill, onSave, onCancel }) => {
                 onChange={handleChange}
                 required
                 placeholder="Electric Company"
+                list="vendor-suggestions"
+                autoComplete="off"
               />
+              <datalist id="vendor-suggestions">
+                {vendors.map(v => <option key={v} value={v} />)}
+              </datalist>
             </div>
 
             <div className="form-group">
@@ -166,7 +201,7 @@ const BillForm = ({ bill, onSave, onCancel }) => {
                     placeholder="New category name"
                   />
                   <button type="button" onClick={handleAddCategory}>Add</button>
-                  <button type="button" onClick={cancelAddCategory}>✕</button>
+                  <button type="button" onClick={() => { setAddingCategory(false); setNewCategoryName(''); }}>✕</button>
                 </div>
               )}
             </div>
@@ -175,13 +210,28 @@ const BillForm = ({ bill, onSave, onCancel }) => {
           <div className="form-row">
             <div className="form-group">
               <label>Payment Method</label>
-              <input
-                type="text"
-                name="payment_method"
-                value={formData.payment_method}
-                onChange={handleChange}
-                placeholder="Credit Card, Bank Transfer, etc."
-              />
+              {!addingPaymentMethod ? (
+                <select name="payment_method" value={formData.payment_method} onChange={handleChange}>
+                  <option value="">Select payment method</option>
+                  {paymentMethods.map(pm => (
+                    <option key={pm.id} value={pm.name}>{pm.name}</option>
+                  ))}
+                  <option value="__new__">+ Add new method...</option>
+                </select>
+              ) : (
+                <div className="category-add-row">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newPaymentMethodName}
+                    onChange={e => setNewPaymentMethodName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddPaymentMethod())}
+                    placeholder="New payment method"
+                  />
+                  <button type="button" onClick={handleAddPaymentMethod}>Add</button>
+                  <button type="button" onClick={() => { setAddingPaymentMethod(false); setNewPaymentMethodName(''); }}>✕</button>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
