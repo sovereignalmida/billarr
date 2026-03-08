@@ -16,8 +16,7 @@
 }
 
 .calendar-title {
-  font-family: 'Fraunces', serif;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-text);
 }
@@ -143,8 +142,7 @@
 }
 
 [data-theme="dark"] .bill-indicator {
-  background: #2d3e50;
-  border-color: #475569;
+  background: #1c2433;
 }
 
 .bill-indicator:hover {

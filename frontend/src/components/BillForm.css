@@ -31,7 +31,7 @@
   font-size: 0.875rem;
   color: var(--color-text);
   transition: all 0.2s ease;
-  background: white;
+  background: var(--color-surface);
 }
 
 .form-group input:focus,

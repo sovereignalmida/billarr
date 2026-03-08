@@ -36,8 +36,7 @@
 }
 
 .expenses-title h2 {
-  font-family: 'Fraunces', serif;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--color-text);
   margin: 0;
@@ -179,8 +178,7 @@
 }
 
 .drill-down-header h3 {
-  font-family: 'Fraunces', serif;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--color-text);
   margin: 0;
