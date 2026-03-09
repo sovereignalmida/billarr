@@ -3,14 +3,17 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
-const fs = require('fs');
 const NotificationService = require('./notificationService');
 const GoogleCalendarService = require('./googleCalendarService');
 const BillService = require('./services/billService');
 const AuthService = require('./services/authService');
+const CategoryService = require('./services/categoryService');
+const PaymentMethodService = require('./services/paymentMethodService');
+const ReportService = require('./services/reportService');
 const createAuthMiddleware = require('./middleware/auth');
 const { dbGet, dbAll, dbRun } = require('./db');
+const { runMigrations } = require('./db/migrations');
+const { parseCSVLine, escapeCSV } = require('./utils/csv');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -75,164 +78,6 @@ app.use('/api', (req, res, next) => {
 const dbPath = process.env.DB_PATH || '/app/data/bills.db';
 const db = new sqlite3.Database(dbPath);
 
-// ─── Migration system ─────────────────────────────────────────────────────────
-
-const MIGRATIONS = [
-  {
-    name: '001_initial_schema',
-    sql: [
-      `CREATE TABLE IF NOT EXISTS bills (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        vendor TEXT NOT NULL,
-        amount REAL NOT NULL,
-        due_date TEXT NOT NULL,
-        account_info TEXT,
-        payment_method TEXT,
-        category TEXT,
-        notes TEXT,
-        recurring TEXT DEFAULT 'none',
-        reminder_days INTEGER DEFAULT 3,
-        status TEXT DEFAULT 'pending',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `CREATE TABLE IF NOT EXISTS settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        notification_method TEXT DEFAULT 'none',
-        telegram_chat_id TEXT,
-        telegram_bot_token TEXT,
-        whatsapp_number TEXT,
-        google_calendar_sync INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `INSERT OR IGNORE INTO settings (id, notification_method)
-       SELECT 1, 'none' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE id = 1)`
-    ]
-  },
-  {
-    name: '002_add_calendar_event_id',
-    sql: [`ALTER TABLE bills ADD COLUMN calendar_event_id TEXT`]
-  },
-  {
-    name: '003_add_last_notified_at',
-    sql: [`ALTER TABLE bills ADD COLUMN last_notified_at DATETIME`]
-  },
-  {
-    name: '004_categories_table',
-    sql: [
-      `CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `INSERT OR IGNORE INTO categories (name) VALUES
-        ('utilities'),('rent'),('insurance'),('subscription'),
-        ('credit-card'),('loan'),('other')`
-    ]
-  },
-  {
-    name: '005_payment_methods_table',
-    sql: [
-      `CREATE TABLE IF NOT EXISTS payment_methods (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `INSERT OR IGNORE INTO payment_methods (name) VALUES
-        ('credit-card'),('debit-card'),('bank-transfer'),('cash'),('check'),('direct-debit'),('paypal')`
-    ]
-  },
-  {
-    name: '006_users_table',
-    sql: [
-      `CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'member',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`
-    ]
-  }
-];
-
-function backupBills(dataDir) {
-  return new Promise((resolve) => {
-    db.all('SELECT * FROM bills', [], (err, rows) => {
-      if (err || !rows || rows.length === 0) return resolve();
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const file = path.join(dataDir, `bills-backup-${ts}.json`);
-      fs.writeFile(file, JSON.stringify(rows, null, 2), (writeErr) => {
-        if (!writeErr) console.log(`📦 Bills backed up to ${file}`);
-        resolve();
-      });
-    });
-  });
-}
-
-async function runMigrations() {
-  await new Promise((resolve, reject) => {
-    db.run(
-      `CREATE TABLE IF NOT EXISTS migrations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      (err) => (err ? reject(err) : resolve())
-    );
-  });
-
-  const applied = await new Promise((resolve, reject) => {
-    db.all('SELECT name FROM migrations', [], (err, rows) =>
-      err ? reject(err) : resolve(new Set(rows.map((r) => r.name)))
-    );
-  });
-
-  const pending = MIGRATIONS.filter((m) => !applied.has(m.name));
-  if (pending.length === 0) {
-    console.log('✅ Database schema up to date');
-    return;
-  }
-
-  const dataDir = path.dirname(dbPath);
-  await backupBills(dataDir);
-
-  let appliedCount = 0;
-  for (const migration of pending) {
-    console.log(`  Applying migration: ${migration.name}`);
-    let failed = false;
-    for (const sql of migration.sql) {
-      await new Promise((resolve) => {
-        db.run(sql, (err) => {
-          if (err) {
-            if (err.message.includes('duplicate column')) {
-              // Idempotent — column already exists, not a real failure
-            } else {
-              console.error(`  ❌ Failed in ${migration.name}: ${err.message}`);
-              failed = true;
-            }
-          }
-          resolve();
-        });
-      });
-      if (failed) break;
-    }
-    if (failed) {
-      console.error(`  Skipping migration record for ${migration.name} — will retry on next start`);
-      continue;
-    }
-    await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT OR IGNORE INTO migrations (name) VALUES (?)',
-        [migration.name],
-        (err) => (err ? reject(err) : resolve())
-      );
-    });
-    appliedCount++;
-  }
-  console.log(`✅ Applied ${appliedCount} of ${pending.length} pending migration(s)`);
-}
-
 // ─── JWT auth guard for all /api routes (when JWT_SECRET is set) ──────────────
 // Applied after the legacy Basic Auth block, so only one mode runs at a time.
 // /api/auth/* routes are excluded so login/setup/status are always accessible.
@@ -246,6 +91,9 @@ app.use('/api', (req, res, next) => {
 
 let billService;
 let authService;
+let categoryService;
+let paymentMethodService;
+let reportService;
 let notificationService;
 let requireAuth = (req, res, next) => next(); // overwritten in main()
 let requireAdmin = (req, res, next) => next(); // overwritten in main()
@@ -356,32 +204,6 @@ app.delete('/api/users/:id', (req, res, next) => requireAdmin(req, res, next), a
     res.status(400).json({ error: err.message });
   }
 });
-
-// CSV helper shared by export and import
-function parseCSVLine(line) {
-  const fields = [];
-  let cur = '', inQuote = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuote) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-      else if (ch === '"') { inQuote = false; }
-      else { cur += ch; }
-    } else {
-      if (ch === '"') { inQuote = true; }
-      else if (ch === ',') { fields.push(cur); cur = ''; }
-      else { cur += ch; }
-    }
-  }
-  fields.push(cur);
-  return fields;
-}
-
-function escapeCSV(v) {
-  if (v === null || v === undefined) return '';
-  const s = String(v);
-  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
 // Bills ───────────────────────────────────────────────────────────────────────
 
@@ -500,20 +322,17 @@ app.get('/api/vendors', async (req, res) => {
 
 app.get('/api/payment-methods', async (req, res) => {
   try {
-    res.json(await dbAll(db, 'SELECT * FROM payment_methods ORDER BY name ASC'));
+    res.json(await paymentMethodService.getAll());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/payment-methods', async (req, res) => {
-  const name = String(req.body.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Payment method name is required' });
   try {
-    const { lastID } = await dbRun(db, 'INSERT INTO payment_methods (name) VALUES (?)', [name]);
-    res.json({ id: lastID, name });
+    res.json(await paymentMethodService.create(req.body.name));
   } catch (err) {
-    res.status(err.message.includes('UNIQUE') ? 409 : 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -521,20 +340,35 @@ app.post('/api/payment-methods', async (req, res) => {
 
 app.get('/api/categories', async (req, res) => {
   try {
-    res.json(await dbAll(db, 'SELECT * FROM categories ORDER BY name ASC'));
+    res.json(await categoryService.getAll());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/categories', async (req, res) => {
-  const name = String(req.body.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Category name is required' });
   try {
-    const { lastID } = await dbRun(db, 'INSERT INTO categories (name) VALUES (?)', [name]);
-    res.json({ id: lastID, name });
+    res.json(await categoryService.create(req.body.name));
   } catch (err) {
-    res.status(err.message.includes('UNIQUE') ? 409 : 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// Reports ─────────────────────────────────────────────────────────────────────
+
+app.get('/api/reports/summary', async (req, res) => {
+  try {
+    res.json(await reportService.getSummary());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/reports/trends', async (req, res) => {
+  try {
+    res.json(await reportService.getTrends());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -581,7 +415,7 @@ app.post('/api/notifications/trigger', triggerLimiter, async (req, res) => {
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  await runMigrations();
+  await runMigrations(db, dbPath);
 
   // Auth
   authService = new AuthService(db);
@@ -594,7 +428,10 @@ async function main() {
   await googleCalendarService.initialize().catch(() => {
     console.log('ℹ️  Google Calendar will remain disabled');
   });
-  billService        = new BillService(db, googleCalendarService);
+  billService         = new BillService(db, googleCalendarService);
+  categoryService     = new CategoryService(db);
+  paymentMethodService = new PaymentMethodService(db);
+  reportService       = new ReportService(db);
   notificationService = new NotificationService(db);
   notificationService.start();
 

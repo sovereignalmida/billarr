@@ -9,6 +9,18 @@ const { dbGet, dbAll, dbRun } = require('../db');
 const { VALID_STATUSES, VALID_RECURRING } = require('../constants');
 const { nextDueDateStr } = require('../utils/dates');
 
+/** Record a price change in bill_amount_history when amount differs. */
+async function recordAmountChange(db, billId, oldAmount, newAmount) {
+  const old = parseFloat(oldAmount);
+  const next = parseFloat(newAmount);
+  if (isNaN(old) || isNaN(next) || old === next) return;
+  await dbRun(
+    db,
+    'INSERT INTO bill_amount_history (bill_id, old_amount, new_amount) VALUES (?, ?, ?)',
+    [billId, old, next]
+  ).catch(err => console.error('Failed to record amount change:', err));
+}
+
 class BillService {
   constructor(db, googleCalendarService = null) {
     this.db = db;
@@ -54,16 +66,18 @@ class BillService {
   // ─── Mutations ─────────────────────────────────────────────────────────────
 
   async create(data) {
-    const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days } = data;
+    const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days,
+            auto_renew, cancellation_url } = data;
 
     const { lastID } = await dbRun(
       this.db,
-      `INSERT INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [vendor, amount, due_date, account_info, payment_method, category, notes, recurring || 'none', reminder_days ?? 3]
+      `INSERT INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, auto_renew, cancellation_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [vendor, amount, due_date, account_info, payment_method, category, notes, recurring || 'none', reminder_days ?? 3,
+       auto_renew ? 1 : 0, cancellation_url || null]
     );
 
-    const bill = { id: lastID, vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status: 'pending' };
+    const bill = { id: lastID, vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status: 'pending', auto_renew: auto_renew ? 1 : 0, cancellation_url: cancellation_url || null };
 
     if (this.gcal) {
       const eventId = await this.gcal.syncBill(bill, 'create').catch(() => null);
@@ -78,12 +92,18 @@ class BillService {
   async update(id, data, existingBill) {
     const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status } = data;
 
+    await recordAmountChange(this.db, id, existingBill.amount, amount);
+
     const { changes } = await dbRun(
       this.db,
       `UPDATE bills SET vendor = ?, amount = ?, due_date = ?, account_info = ?,
-       payment_method = ?, category = ?, notes = ?, recurring = ?, reminder_days = ?, status = ?
+       payment_method = ?, category = ?, notes = ?, recurring = ?, reminder_days = ?, status = ?,
+       auto_renew = ?, cancellation_url = ?
        WHERE id = ?`,
-      [vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status, id]
+      [vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status,
+       data.auto_renew ?? existingBill.auto_renew ?? 0,
+       data.cancellation_url !== undefined ? data.cancellation_url : existingBill.cancellation_url,
+       id]
     );
 
     // Google Calendar sync

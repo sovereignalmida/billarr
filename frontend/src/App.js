@@ -6,6 +6,7 @@ import ListView from './components/ListView';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import ExpensesView from './components/ExpensesView';
+import Dashboard from './components/Dashboard';
 import { apiFetch, clearAuth } from './utils/apiFetch';
 import './App.css';
 
@@ -150,6 +151,9 @@ function App() {
             <button className={`view-toggle ${view === 'expenses' ? 'active' : ''}`} onClick={() => setView('expenses')}>
               Expenses
             </button>
+            <button className={`view-toggle ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
+              Dashboard
+            </button>
             <button className="btn-primary" onClick={handleNewBill}>
               + New Bill
             </button>
@@ -184,6 +188,8 @@ function App() {
       <main className="app-main">
         {view === 'expenses' ? (
           <ExpensesView bills={bills} />
+        ) : view === 'dashboard' ? (
+          <Dashboard onAuthError={handleAuthError} />
         ) : view === 'calendar' ? (
           <Calendar bills={bills} onBillClick={handleBillClick} selectedBill={selectedBill} />
         ) : (

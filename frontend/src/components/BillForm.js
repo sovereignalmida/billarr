@@ -13,7 +13,9 @@ const BillForm = ({ bill, onSave, onCancel }) => {
     notes: '',
     recurring: 'none',
     reminder_days: 3,
-    status: 'pending'
+    status: 'pending',
+    auto_renew: false,
+    cancellation_url: '',
   });
 
   const [categories, setCategories] = useState([]);
@@ -38,7 +40,9 @@ const BillForm = ({ bill, onSave, onCancel }) => {
         notes: bill.notes || '',
         recurring: bill.recurring || 'none',
         reminder_days: bill.reminder_days || 3,
-        status: bill.status || 'pending'
+        status: bill.status || 'pending',
+        auto_renew: !!bill.auto_renew,
+        cancellation_url: bill.cancellation_url || '',
       });
     }
   }, [bill]);
@@ -75,7 +79,7 @@ const BillForm = ({ bill, onSave, onCancel }) => {
   }, []);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     if (name === 'category' && value === '__new__') {
       setAddingCategory(true);
       return;
@@ -84,7 +88,7 @@ const BillForm = ({ bill, onSave, onCancel }) => {
       setAddingPaymentMethod(true);
       return;
     }
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleAddCategory = async () => {
@@ -279,6 +283,32 @@ const BillForm = ({ bill, onSave, onCancel }) => {
               </select>
             </div>
           </div>
+
+          {formData.recurring !== 'none' && (
+            <div className="form-row">
+              <div className="form-group form-group-checkbox">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    name="auto_renew"
+                    checked={formData.auto_renew}
+                    onChange={handleChange}
+                  />
+                  Auto-renews
+                </label>
+              </div>
+              <div className="form-group">
+                <label>Cancellation URL</label>
+                <input
+                  type="url"
+                  name="cancellation_url"
+                  value={formData.cancellation_url}
+                  onChange={handleChange}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label>Notes</label>

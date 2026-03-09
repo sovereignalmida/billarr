@@ -4,7 +4,7 @@
 
 <img src="logo.png" alt="Billarr Logo" width="300"/>
 
-**Self-hosted bill tracking and reminders for the \*arr stack**
+**Self-hosted bill and subscription tracker for the self-hosted community**
 
 *Never walk the plank of late fees again!* 🏴‍☠️💰
 
@@ -13,7 +13,7 @@
 [![Node.js](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Screenshots](#-screenshots) • [Contributing](#-contributing)
+[Features](#-features) • [Quick Start](#-quick-start) • [Authentication](#-authentication) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
@@ -21,61 +21,79 @@
 
 ## 🎯 What is Billarr?
 
-Billarr is a beautiful, self-hosted bill tracking and reminder application designed for the self-hosted community. Keep track of all your bills, visualize them in a clean calendar view, and never miss a payment with integrated Telegram and Google Calendar notifications.
+Billarr is a self-hosted bill tracking and subscription management application designed for the self-hosted community. Track recurring bills, visualise spending trends, get reminders before payments are due, and keep your financial data on your own server — no subscriptions, no cloud, no tracking.
+
+Inspired by the naming and aesthetic of the \*arr ecosystem.
 
 ### Why Billarr?
 
-- 🔒 **Privacy First** - Your financial data stays on your server
-- 🏴‍☠️ **\*arr Ecosystem** - Fits perfectly with Sonarr, Radarr, and friends
-- 📱 **Mobile Friendly** - Gorgeous responsive design
-- 🔔 **Smart Reminders** - Telegram bots + Google Calendar sync
-- 🐳 **Easy Deploy** - One Docker Compose command
-- 🎨 **Beautiful UI** - Modern design with thoughtful UX
+- 🔒 **Privacy First** — your financial data stays on your server, full stop
+- 📊 **Actual Insights** — spending dashboard, category breakdowns, price change history
+- 🔄 **Subscription Aware** — normalised monthly cost for weekly/quarterly/annual bills
+- 🔔 **Smart Reminders** — Telegram push notifications + Google Calendar sync
+- 🐳 **Easy Deploy** — one Docker Compose command, pre-built images
+- 🌗 **Light & Dark** — clean modern UI with theme toggle
+- 👥 **Multi-User** — JWT user accounts with admin/member roles
 
 ---
 
 ## ✨ Features
 
 ### 📅 Bill Management
-- **Calendar View** - See all bills at a glance with color-coded status; recurring bills projected into future months
-- **List View** - Filterable, sortable card view — filter by status, category, or payment method
-- **Expenses View** - Annual 12-month grid with recurring projections and CSV export
-- **Detailed Tracking** - Vendor, amount, due date, payment method, account info, and notes
-- **Categories** - Dynamic categories with inline create-new
-- **Payment Methods** - Dynamic dropdown with inline create-new
-- **Vendor Autocomplete** - Pick from past vendors or type a new one
-- **Recurring Bills** - Weekly, monthly, quarterly, or annual — auto-creates next bill on paid
-- **Status Tracking** - Pending, paid, overdue
+
+- **Calendar View** — all bills at a glance, colour-coded by status; recurring bills projected into future months
+- **List View** — filterable card view by status, category, or payment method
+- **Expenses View** — annual 12-month grid with recurring projections, paid/pending status bars, and per-month drill-down with CSV export
+- **Detailed Tracking** — vendor, amount, due date, payment method, account info, category, notes
+- **Categories & Payment Methods** — fully dynamic; create new ones inline from the bill form
+- **Vendor Autocomplete** — picks from your past vendors as you type
+- **Recurring Bills** — weekly, monthly, quarterly, or annual; auto-creates the next bill when you mark one paid
+- **Status Tracking** — pending, paid, overdue
+
+### 📊 Dashboard & Reporting
+
+- **Summary Cards** — this month's total, paid, still due, overdue count, upcoming in 7 and 30 days
+- **6-Month Spend Bars** — visual trend showing paid vs pending split per month, no chart libraries required
+- **Category Breakdown** — proportional bar chart for the current month's spend
+- **Subscription Table** — all recurring bills with normalised monthly-equivalent cost, auto-renew status, and cancellation URL
+- **Price Change History** — automatically records when a bill's amount changes; shows diff and percentage
+
+### 🔄 Subscription Management
+
+- Mark any recurring bill with **auto-renew** on/off
+- Store a **cancellation URL** per subscription — linked directly from the dashboard
+- **Monthly equivalent** normalisation: a \$120/year bill shows as \$10/month; a \$25/week bill shows as ~\$108/month
+- Subscriptions sorted by monthly equivalent so you can see your biggest recurring costs at a glance
 
 ### 🔔 Notifications
-- **📱 Telegram** - Instant push notifications to your phone
-- **📅 Google Calendar** - Auto-sync bills as calendar events with reminders
-- **🤖 Smart Scheduler** - Runs every hour, checks for bills in reminder window
-- **⚙️ Customizable** - Set reminder days per bill
+
+- **Telegram** — instant push notifications to your phone or group
+- **Google Calendar** — bills synced as calendar events with configurable reminders
+- **Smart Scheduler** — checks every 30 minutes; notifies within each bill's reminder window
+- **Per-bill Reminder Days** — set 0–30 days lead time individually per bill
 
 ### 💾 Data Management
-- **Auto Backup** - JSON backup written before every database migration (in `./data/`)
-- **Manual Backup** - Download a JSON snapshot any time from Settings
-- **CSV Export** - Export all bills or an annual expenses view to CSV
-- **CSV Import** - Import bills from a Billarr-format CSV
 
-### 🎨 Design
-- **Clean & Modern** - Fraunces + Manrope typography
-- **Dark Mode** - Toggle between light and dark themes
-- **Responsive** - Works on desktop, tablet, and mobile
+- **Auto Backup** — timestamped JSON snapshot written to `./data/` before every database migration
+- **Manual Backup** — download a full JSON backup any time from Settings (admin only)
+- **CSV Export** — export all bills or an annual expenses view to CSV
+- **CSV Import** — bulk-import from a Billarr-format CSV (admin only)
 
 ### 🔧 Technical
-- **Self-Hosted** - Full control over your data
-- **SQLite Database** - Lightweight, bind-mounted for easy backup
-- **Pre-built Docker Images** - Pull from `ghcr.io`, no local build needed
-- **RESTful API** - Clean Express backend
-- **No Tracking** - Zero analytics or third-party services
+
+- **Self-Hosted** — SQLite database, bind-mounted `./data/` directory, zero cloud dependencies
+- **Pre-built Docker Images** — pull from `ghcr.io`, no local build required
+- **Automatic Migrations** — schema updates run on startup; a backup is written before each migration run
+- **RESTful API** — clean Express backend; all business logic in a service layer, routes are 3–6 lines each
+- **Rate Limiting** — 300 req/15 min on all API routes; separate stricter limits on auth and notification trigger endpoints
+- **No Tracking** — zero analytics, no third-party beacons, no telemetry
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Docker and Docker Compose
 
 ### Installation (pre-built images — recommended)
@@ -93,7 +111,9 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DB_PATH=/app/data/bills.db
-      # - BILLARR_PASSWORD=changeme   # uncomment to enable password protection
+      # Auth — choose one mode (see Authentication section below):
+      # - JWT_SECRET=change-this-to-a-long-random-string   # recommended
+      # - BILLARR_PASSWORD=changeme                        # legacy single-password
     restart: unless-stopped
 
   frontend:
@@ -106,15 +126,13 @@ services:
     restart: unless-stopped
 ```
 
-Then:
-
 ```bash
 docker compose pull
 docker compose up -d
-# Access Billarr at http://localhost:8080
+# Open http://localhost:8080
 ```
 
-That's it — no cloning, no building. 🎉
+No cloning, no building. 🎉
 
 ### Updating
 
@@ -122,153 +140,189 @@ That's it — no cloning, no building. 🎉
 docker compose pull && docker compose up -d
 ```
 
-Migrations run automatically on startup. Your data in `./data/` is always backed up to a timestamped JSON file before any schema change.
+Migrations run automatically on startup. Your `./data/` is backed up to a timestamped JSON file before any schema change.
 
-### Alternative: build from source
+### Build from source
 
 ```bash
 git clone https://github.com/sovereignalmida/billarr.git
 cd billarr
 cp docker-compose.example.yml docker-compose.yml
-# Edit docker-compose.yml — swap image: lines for build: lines
+# Swap image: lines for build: lines in the compose file
 docker compose up -d --build
 ```
 
-### First Steps
-1. Create your first bill
-2. Set up notifications (optional)
-   - [Telegram Setup Guide](TELEGRAM_SETUP.md)
-   - [Google Calendar Guide](GOOGLE_CALENDAR_SETUP.md)
-3. Configure reminder preferences per bill
-4. Never miss a payment again!
+---
+
+## 🔐 Authentication
+
+Billarr supports three modes. Pick one and set it in your `docker-compose.yml` environment.
+
+### Mode 1: JWT user accounts (recommended)
+
+Full user management with admin/member roles. Recommended for any instance accessible beyond your local machine.
+
+```yaml
+environment:
+  - JWT_SECRET=change-this-to-a-long-random-string
+```
+
+> Generate a strong secret: `openssl rand -hex 32`
+
+**First-run setup:**
+
+1. Open Billarr — a first-run setup screen appears automatically when no users exist yet
+2. Enter your name, email address, and a password (minimum 8 characters)
+3. Your account is created as **admin**
+4. Log in and start tracking
+
+**Adding more users** (admin only):
+
+Go to **Settings → User Management → Add User**. Assign `admin` or `member`:
+
+| Role | Permissions |
+|---|---|
+| **admin** | Full access — bills, settings, users, backup, import/export |
+| **member** | View and manage bills only; no settings or user management |
+
+**Changing your password:** Settings → Account → Change Password.
+
+### Mode 2: Single password (legacy)
+
+One shared password for the whole instance. Simpler, but no roles or per-user accounts.
+
+```yaml
+environment:
+  - BILLARR_PASSWORD=changeme
+```
+
+The browser stores it in `sessionStorage` and prompts again on 401.
+
+### Mode 3: No auth (default)
+
+Leave both variables unset. Anyone with network access can use the app. Only appropriate on a trusted private network.
 
 ---
 
-## 📚 Documentation
-
-- **[README.md](README.md)** - Full user guide with all features
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment & advanced configuration
-- **[NOTIFICATIONS.md](NOTIFICATIONS.md)** - Complete notification setup guide
-- **[TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)** - Telegram bot configuration
-- **[GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)** - Google Calendar integration
-- **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** - Technical overview & architecture
-
----
-
-## 📱 Screenshots
-
-<div align="center">
-
-### Calendar View
-*Visualize all your bills by due date with color-coded status*
-
-### Bill Details
-*Comprehensive bill information at your fingertips*
-
-### Mobile Responsive
-*Works beautifully on any device*
-
-</div>
-
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 18, Modern CSS, Responsive Design
-- **Backend**: Node.js, Express, SQLite3
-- **Notifications**: Telegram Bot API, Google Calendar API
-- **Deployment**: Docker, Docker Compose, Nginx
-- **Design**: Custom UI with Fraunces & Manrope fonts
-
----
-
-## 🎨 Configuration
-
-### Ports
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:3001`
+## ⚙️ Configuration
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `BILLARR_PASSWORD` | *(unset)* | Enable password protection. Leave unset to disable auth. |
+| `JWT_SECRET` | *(unset)* | Enable JWT user accounts. Set to a long random string. |
+| `BILLARR_PASSWORD` | *(unset)* | Enable legacy single-password mode. Ignored if `JWT_SECRET` is set. |
 | `PORT` | `3001` | Backend API port |
-| `DB_PATH` | `/app/data/bills.db` | SQLite database path inside container |
+| `DB_PATH` | `/app/data/bills.db` | SQLite database path inside the container |
+| `CORS_ORIGIN` | `http://localhost:8080` | Allowed CORS origin. Set to your frontend's public URL in production. |
 
 ### Data Persistence
 
 All data lives in `./data/` on the host — a bind mount, not a Docker volume. This means:
-- Data survives `docker compose down`, image updates, and even `docker system prune`
+
+- Data survives `docker compose down`, image updates, and `docker system prune`
 - Pre-migration backups are written to `./data/bills-backup-{timestamp}.json` automatically
-- Manual backups available any time via **Settings → Data Management → Download Backup**
+- Manual backup available any time via **Settings → Data Management → Download Backup** (admin only)
+
+### Ports
+
+- Frontend: `http://localhost:8080`
+- Backend API: `http://localhost:3001` (internal; not exposed publicly by default)
 
 ---
 
 ## 🔔 Setting Up Notifications
 
-### Telegram (Recommended - 5 minutes)
-1. Message @BotFather on Telegram → `/newbot`
-2. Get bot token and chat ID
-3. Enter in Billarr settings
-4. Done! 🎉
+### Telegram (5 minutes)
 
-**Full guide:** [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)
+1. Message `@BotFather` on Telegram → `/newbot`
+2. Copy the bot token
+3. Start a chat with your bot, then get your chat ID from `@userinfobot`
+4. Enter both in **Settings → Notifications**
+
+Full guide: [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)
 
 ### Google Calendar (10 minutes)
-1. Create Google Cloud project
-2. Enable Calendar API
-3. Create service account
-4. Share calendar with service account
-5. Add credentials to `./data/google-credentials.json`
 
-**Full guide:** [GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)
+1. Create a Google Cloud project and enable the Calendar API
+2. Create a service account and download the JSON key file
+3. Share your calendar with the service account email address
+4. Place the key file at `./data/google-credentials.json`
+5. Enable sync in **Settings → Google Calendar**
+
+Full guide: [GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)
+
+---
+
+## 📚 Documentation
+
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — production deployment, HTTPS, Traefik, Nginx, Caddy
+- **[NOTIFICATIONS.md](NOTIFICATIONS.md)** — complete notification setup guide
+- **[TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)** — Telegram bot configuration step-by-step
+- **[GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md)** — Google Calendar integration
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to contribute
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend:** React 18, Manrope font, vanilla CSS with CSS variables, fully responsive
+- **Backend:** Node.js 18, Express, SQLite3, service-layer architecture
+- **Auth:** JWT (jsonwebtoken + bcryptjs) with admin/member roles; legacy Basic Auth for backward compatibility
+- **Notifications:** Telegram Bot API, Google Calendar API
+- **Deployment:** Docker, Docker Compose, Nginx
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how you can help:
+Contributions are welcome.
 
-- 🐛 Report bugs
-- 💡 Suggest new features
-- 📖 Improve documentation
-- 🔧 Submit pull requests
+- Report bugs via [GitHub Issues](https://github.com/sovereignalmida/billarr/issues)
+- Suggest features via [GitHub Discussions](https://github.com/sovereignalmida/billarr/discussions)
+- Open an issue before starting major work
 
-Please open an issue first to discuss major changes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## 📋 Roadmap
 
+- [x] Calendar and list views
+- [x] Recurring bill auto-creation
+- [x] Telegram notifications
+- [x] Google Calendar sync
+- [x] Dark mode
+- [x] CSV export / import
+- [x] Custom categories and payment methods
+- [x] Annual expenses view with projections
+- [x] Multi-user accounts with roles (JWT)
+- [x] Spending dashboard with trend charts
+- [x] Subscription management with monthly-equivalent normalisation
+- [x] Price change history tracking
 - [ ] Email notifications
-- [ ] Multi-user support
-- [ ] Budget tracking / spending charts
-- [ ] Bill splitting
-- [ ] Mobile app (PWA)
+- [ ] PWA / add to home screen
 - [ ] API webhooks
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Inspired by the amazing \*arr ecosystem
-- Built for the self-hosted community
-- Logo created with AI assistance
+- Inspired by the naming and aesthetic of the \*arr self-hosted ecosystem
+- Built for and by the self-hosted community
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
 ## 💬 Support
 
-- **Issues**: [GitHub Issues](https://github.com/sovereignalmida/billarr/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/sovereignalmida/billarr/discussions)
-- **Documentation**: Check the guides in this repo
+- **Issues:** [GitHub Issues](https://github.com/sovereignalmida/billarr/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/sovereignalmida/billarr/discussions)
 
 ---
 

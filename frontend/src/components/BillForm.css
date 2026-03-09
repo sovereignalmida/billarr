@@ -99,6 +99,28 @@
   background: var(--color-primary-hover);
 }
 
+.form-group-checkbox {
+  justify-content: flex-end;
+  padding-bottom: 0.25rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
