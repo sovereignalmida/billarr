@@ -3,13 +3,16 @@ import NotificationTest from './NotificationTest';
 import { apiFetch } from '../utils/apiFetch';
 import './Settings.css';
 
-// ─── Users panel (admin only) ─────────────────────────────────────────────────
+// ─── Users panel ─────────────────────────────────────────────────────────────
+// NOTE: deliberately NOT a <form> — it renders inside the outer settings <form>
+// and nested forms in HTML are invalid. All actions use onClick instead.
 
 const UsersPanel = ({ apiUrl }) => {
   const [users, setUsers] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newUser, setNewUser] = useState({ email: '', name: '', password: '', role: 'member' });
   const [userError, setUserError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const fetchUsers = () => {
     apiFetch(`${apiUrl}/api/users`).then(setUsers).catch(() => {});
@@ -17,10 +20,12 @@ const UsersPanel = ({ apiUrl }) => {
 
   useEffect(() => { fetchUsers(); }, [apiUrl]);
 
-  const handleAddUser = async (e) => {
-    e.preventDefault();
+  const handleAddUser = async () => {
     setUserError(null);
+    if (!newUser.name.trim()) { setUserError('Name is required'); return; }
+    if (!newUser.email.trim()) { setUserError('Email is required'); return; }
     if (newUser.password.length < 8) { setUserError('Password must be at least 8 characters'); return; }
+    setLoading(true);
     try {
       await apiFetch(`${apiUrl}/api/users`, { method: 'POST', body: JSON.stringify(newUser) });
       setNewUser({ email: '', name: '', password: '', role: 'member' });
@@ -28,6 +33,8 @@ const UsersPanel = ({ apiUrl }) => {
       fetchUsers();
     } catch (err) {
       setUserError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,6 +60,9 @@ const UsersPanel = ({ apiUrl }) => {
   return (
     <div className="users-panel">
       <div className="users-list">
+        {users.length === 0 && (
+          <p className="users-empty">No users yet.</p>
+        )}
         {users.map(u => (
           <div key={u.id} className="user-row">
             <div className="user-row-info">
@@ -60,43 +70,49 @@ const UsersPanel = ({ apiUrl }) => {
               <span className="user-row-email">{u.email}</span>
             </div>
             <div className="user-row-actions">
-              <select
-                value={u.role}
-                onChange={e => handleRoleChange(u.id, e.target.value)}
-                className="user-role-select"
-              >
+              <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)} className="user-role-select">
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
               </select>
-              <button
-                type="button"
-                className="btn-user-delete"
-                onClick={() => handleDelete(u.id, u.name)}
-                title="Remove user"
-              >
-                ×
-              </button>
+              <button type="button" className="btn-user-delete" onClick={() => handleDelete(u.id, u.name)} title="Remove user">×</button>
             </div>
           </div>
         ))}
       </div>
 
       {showAdd ? (
-        <form onSubmit={handleAddUser} className="add-user-form">
+        <div className="add-user-form">
           <div className="form-row">
             <div className="form-group">
               <label>Name</label>
-              <input type="text" value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} required placeholder="Full name" />
+              <input
+                type="text"
+                value={newUser.name}
+                onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))}
+                placeholder="Full name"
+                autoFocus
+              />
             </div>
             <div className="form-group">
               <label>Email</label>
-              <input type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} required placeholder="email@example.com" />
+              <input
+                type="email"
+                value={newUser.email}
+                onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
+                placeholder="email@example.com"
+              />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label>Password</label>
-              <input type="password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} required placeholder="8+ characters" />
+              <input
+                type="password"
+                value={newUser.password}
+                onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))}
+                placeholder="8+ characters"
+                onKeyDown={e => e.key === 'Enter' && handleAddUser()}
+              />
             </div>
             <div className="form-group">
               <label>Role</label>
@@ -108,10 +124,14 @@ const UsersPanel = ({ apiUrl }) => {
           </div>
           {userError && <p className="user-error">{userError}</p>}
           <div className="add-user-actions">
-            <button type="button" className="btn-secondary" onClick={() => { setShowAdd(false); setUserError(null); }}>Cancel</button>
-            <button type="submit" className="btn-primary">Add User</button>
+            <button type="button" className="btn-secondary" onClick={() => { setShowAdd(false); setUserError(null); setNewUser({ email: '', name: '', password: '', role: 'member' }); }}>
+              Cancel
+            </button>
+            <button type="button" className="btn-primary" onClick={handleAddUser} disabled={loading}>
+              {loading ? 'Adding...' : 'Add User'}
+            </button>
           </div>
-        </form>
+        </div>
       ) : (
         <button type="button" className="btn-add-user" onClick={() => setShowAdd(true)}>
           + Add User
@@ -121,14 +141,26 @@ const UsersPanel = ({ apiUrl }) => {
   );
 };
 
-// ─── Main Settings component ──────────────────────────────────────────────────
+// ─── Settings (tabbed) ────────────────────────────────────────────────────────
 
 const Settings = ({ onClose, apiUrl, isAdmin = true, currentUser = null }) => {
+  const isJwt = !!localStorage.getItem('billarr-token');
+
+  // Build tab list based on what's available for this user
+  const tabs = [
+    isAdmin && { id: 'notifications', label: 'Notifications' },
+    isAdmin && { id: 'data',          label: 'Data' },
+    isAdmin && isJwt && { id: 'users', label: 'Users' },
+    currentUser  && { id: 'account',  label: 'Account' },
+  ].filter(Boolean);
+
+  const [activeTab, setActiveTab] = useState(tabs[0]?.id || 'account');
+
   const [settings, setSettings] = useState({
     notification_method: 'none',
     telegram_chat_id: '',
     telegram_bot_token: '',
-    google_calendar_sync: 0
+    google_calendar_sync: 0,
   });
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -138,7 +170,7 @@ const Settings = ({ onClose, apiUrl, isAdmin = true, currentUser = null }) => {
   useEffect(() => {
     apiFetch(`${apiUrl}/api/settings`)
       .then(data => setSettings(data))
-      .catch(err => console.error('Error fetching settings:', err));
+      .catch(() => {});
   }, [apiUrl]);
 
   const handleChange = (e) => {
@@ -148,7 +180,7 @@ const Settings = ({ onClose, apiUrl, isAdmin = true, currentUser = null }) => {
     setSaveError(null);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSaveNotifications = async (e) => {
     e.preventDefault();
     const { whatsapp_number, ...settingsToSave } = settings;
     try {
@@ -221,12 +253,78 @@ const Settings = ({ onClose, apiUrl, isAdmin = true, currentUser = null }) => {
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="settings-form">
+        {/* Tab navigation */}
+        {tabs.length > 1 && (
+          <div className="settings-tabs">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`settings-tab ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-          {/* Data Management — admin only */}
-          {isAdmin && (
-            <div className="form-section">
-              <h3>Data Management</h3>
+        <div className="settings-body">
+
+          {/* ── Notifications tab ── */}
+          {activeTab === 'notifications' && (
+            <form onSubmit={handleSaveNotifications} className="settings-form">
+              <div className="form-group">
+                <label>Notification Method</label>
+                <select name="notification_method" value={settings.notification_method} onChange={handleChange}>
+                  <option value="none">None</option>
+                  <option value="telegram">Telegram</option>
+                </select>
+              </div>
+
+              {settings.notification_method === 'telegram' && (
+                <>
+                  <div className="form-group">
+                    <label>Telegram Bot Token</label>
+                    <input type="text" name="telegram_bot_token" value={settings.telegram_bot_token || ''} onChange={handleChange} placeholder="Enter your bot token" />
+                    <small>Get a bot token from @BotFather on Telegram</small>
+                  </div>
+                  <div className="form-group">
+                    <label>Telegram Chat ID</label>
+                    <input type="text" name="telegram_chat_id" value={settings.telegram_chat_id || ''} onChange={handleChange} placeholder="Enter your chat ID" />
+                    <small>Use @userinfobot to get your chat ID</small>
+                  </div>
+                </>
+              )}
+
+              <div className="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" name="google_calendar_sync" checked={settings.google_calendar_sync === 1} onChange={handleChange} />
+                  <span>Sync with Google Calendar</span>
+                </label>
+                <small>Bills will be added to your calendar as reminders</small>
+              </div>
+
+              {settings.notification_method === 'telegram' && <NotificationTest apiUrl={apiUrl} />}
+
+              <div className="info-box" style={{ marginTop: '1.5rem' }}>
+                <h4>ℹ️ About Notifications</h4>
+                <p>The reminder timing is set individually for each bill. The scheduler runs every 30 minutes.</p>
+                <p style={{ marginTop: '0.5rem' }}><strong>Setup Guides:</strong> See TELEGRAM_SETUP.md and GOOGLE_CALENDAR_SETUP.md.</p>
+              </div>
+
+              <div className="form-actions">
+                {saved && <span className="save-indicator">✓ Saved!</span>}
+                {saveError && <span className="save-error">{saveError}</span>}
+                <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
+                <button type="submit" className="btn-primary">Save</button>
+              </div>
+            </form>
+          )}
+
+          {/* ── Data tab ── */}
+          {activeTab === 'data' && (
+            <div className="settings-form">
               <div className="data-actions">
                 <div className="data-action-group">
                   <p className="data-action-label">Backup all bills as JSON</p>
@@ -248,71 +346,44 @@ const Settings = ({ onClose, apiUrl, isAdmin = true, currentUser = null }) => {
                   <button type="button" onClick={() => setImportStatus(null)}>×</button>
                 </div>
               )}
+              <div className="form-actions">
+                <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
+              </div>
             </div>
           )}
 
-          {/* Notifications — admin only */}
-          {isAdmin && (
-            <div className="form-section">
-              <h3>Notification Preferences</h3>
-              <div className="form-group">
-                <label>Notification Method</label>
-                <select name="notification_method" value={settings.notification_method} onChange={handleChange}>
-                  <option value="none">None</option>
-                  <option value="telegram">Telegram</option>
-                </select>
-              </div>
-              {settings.notification_method === 'telegram' && (
-                <>
-                  <div className="form-group">
-                    <label>Telegram Bot Token</label>
-                    <input type="text" name="telegram_bot_token" value={settings.telegram_bot_token || ''} onChange={handleChange} placeholder="Enter your bot token" />
-                    <small>Get a bot token from @BotFather on Telegram</small>
-                  </div>
-                  <div className="form-group">
-                    <label>Telegram Chat ID</label>
-                    <input type="text" name="telegram_chat_id" value={settings.telegram_chat_id || ''} onChange={handleChange} placeholder="Enter your chat ID" />
-                    <small>Use @userinfobot to get your chat ID</small>
-                  </div>
-                </>
-              )}
-              <div className="form-group checkbox-group">
-                <label>
-                  <input type="checkbox" name="google_calendar_sync" checked={settings.google_calendar_sync === 1} onChange={handleChange} />
-                  <span>Sync with Google Calendar</span>
-                </label>
-                <small>Bills will be added to your calendar as reminders</small>
-              </div>
-              {settings.notification_method === 'telegram' && <NotificationTest apiUrl={apiUrl} />}
-            </div>
-          )}
-
-          {/* Users — admin only, JWT mode */}
-          {isAdmin && localStorage.getItem('billarr-token') && (
-            <div className="form-section">
-              <h3>Users</h3>
+          {/* ── Users tab ── */}
+          {activeTab === 'users' && (
+            <div className="settings-form">
               <UsersPanel apiUrl={apiUrl} />
-            </div>
-          )}
-
-          {/* Account — always visible when JWT auth is active */}
-          {currentUser && (
-            <div className="form-section">
-              <h3>Account</h3>
-              <div className="form-group">
-                <label>Signed in as</label>
-                <p className="account-info">{currentUser.name} &middot; <span className="account-email">{currentUser.email}</span></p>
+              <div className="form-actions">
+                <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
               </div>
             </div>
           )}
 
-          <div className="form-actions">
-            {saved && <span className="save-indicator">✓ Saved!</span>}
-            {saveError && <span className="save-error">{saveError}</span>}
-            <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
-            {isAdmin && <button type="submit" className="btn-primary">Save Settings</button>}
-          </div>
-        </form>
+          {/* ── Account tab ── */}
+          {activeTab === 'account' && (
+            <div className="settings-form">
+              {currentUser && (
+                <div className="form-group">
+                  <label>Signed in as</label>
+                  <p className="account-info">
+                    {currentUser.name}
+                    {' · '}
+                    <span className="account-email">{currentUser.email}</span>
+                    {' · '}
+                    <span className="account-role">{currentUser.role}</span>
+                  </p>
+                </div>
+              )}
+              <div className="form-actions">
+                <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
