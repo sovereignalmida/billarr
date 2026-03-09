@@ -8,6 +8,8 @@ const fs = require('fs');
 const NotificationService = require('./notificationService');
 const GoogleCalendarService = require('./googleCalendarService');
 const BillService = require('./services/billService');
+const AuthService = require('./services/authService');
+const createAuthMiddleware = require('./middleware/auth');
 const { dbGet, dbAll, dbRun } = require('./db');
 
 const app = express();
@@ -20,42 +22,49 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Rate limiting — general API limit
+// Rate limiting
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
 });
-// Stricter limit on the notification trigger (external API calls)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many auth attempts, please try again later' },
+});
 const triggerLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 5,
   message: { error: 'Too many trigger requests' },
 });
 app.use('/api', apiLimiter);
 
-// Auth middleware — protect all /api routes when BILLARR_PASSWORD is set
+// ─── Legacy Basic Auth (backward compat when JWT_SECRET is not set) ───────────
+// When JWT_SECRET IS set, this block is skipped entirely — JWT auth handles everything.
 app.use('/api', (req, res, next) => {
+  if (process.env.JWT_SECRET) return next(); // JWT mode — skip legacy auth
   const password = process.env.BILLARR_PASSWORD;
-  if (!password) return next(); // auth disabled if no password configured
+  if (!password) return next(); // no auth configured at all
+
+  // Skip legacy auth for /api/auth/* so the frontend can check auth status
+  if (req.path.startsWith('/auth/')) return next();
+
   const auth = req.headers['authorization'] || '';
   const b64 = auth.replace(/^Basic /, '');
   const decoded = Buffer.from(b64, 'base64').toString();
   const colonIndex = decoded.indexOf(':');
   const pass = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
-
-  // Constant-time comparison to prevent timing attacks
-  const passBuffer     = Buffer.from(pass);
+  const passBuffer = Buffer.from(pass);
   const expectedBuffer = Buffer.from(password);
   const match =
     passBuffer.length === expectedBuffer.length &&
     crypto.timingSafeEqual(passBuffer, expectedBuffer);
-
   if (match) return next();
   res.set('WWW-Authenticate', 'Basic realm="Billarr"');
-  res.status(401).json({ error: 'Unauthorized' });
+  return res.status(401).json({ error: 'Unauthorized' });
 });
 
 // Database setup
@@ -126,6 +135,19 @@ const MIGRATIONS = [
       )`,
       `INSERT OR IGNORE INTO payment_methods (name) VALUES
         ('credit-card'),('debit-card'),('bank-transfer'),('cash'),('check'),('direct-debit'),('paypal')`
+    ]
+  },
+  {
+    name: '006_users_table',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`
     ]
   }
 ];
@@ -207,12 +229,129 @@ async function runMigrations() {
   console.log(`✅ Applied ${appliedCount} of ${pending.length} pending migration(s)`);
 }
 
+// ─── JWT auth guard for all /api routes (when JWT_SECRET is set) ──────────────
+// Applied after the legacy Basic Auth block, so only one mode runs at a time.
+// /api/auth/* routes are excluded so login/setup/status are always accessible.
+app.use('/api', (req, res, next) => {
+  if (!process.env.JWT_SECRET) return next(); // not in JWT mode
+  if (req.path.startsWith('/auth/')) return next(); // login/setup/status are public
+  requireAuth(req, res, next); // requireAuth is wired up in main() below
+});
+
 // ─── Services (initialised in main(), used by routes) ─────────────────────────
 
 let billService;
+let authService;
 let notificationService;
+let requireAuth = (req, res, next) => next(); // overwritten in main()
+let requireAdmin = (req, res, next) => next(); // overwritten in main()
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
+
+// Auth ────────────────────────────────────────────────────────────────────────
+
+// Status — always public, tells the frontend what auth mode is active
+app.get('/api/auth/status', async (req, res) => {
+  if (process.env.JWT_SECRET) {
+    const userCount = await authService.getUserCount().catch(() => 0);
+    return res.json({ mode: 'jwt', hasUsers: userCount > 0 });
+  }
+  if (process.env.BILLARR_PASSWORD) {
+    return res.json({ mode: 'legacy' });
+  }
+  res.json({ mode: 'none' });
+});
+
+// First-run setup — creates the first admin; only works when no users exist
+app.post('/api/auth/setup', authLimiter, async (req, res) => {
+  if (!process.env.JWT_SECRET) return res.status(400).json({ error: 'JWT auth not enabled (JWT_SECRET not set)' });
+  try {
+    const count = await authService.getUserCount();
+    if (count > 0) return res.status(409).json({ error: 'Setup already complete' });
+    const { email, name, password } = req.body;
+    if (!email || !name || !password) return res.status(400).json({ error: 'email, name, and password are required' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const user = await authService.createUser(email, name, password, 'admin');
+    const { token } = await authService.login(email, password);
+    res.json({ token, user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Login
+app.post('/api/auth/login', authLimiter, async (req, res) => {
+  if (!process.env.JWT_SECRET) return res.status(400).json({ error: 'JWT auth not enabled' });
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+    const result = await authService.login(email, password);
+    res.json(result);
+  } catch (err) {
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// Current user
+app.get('/api/auth/me', (req, res, next) => requireAuth(req, res, next), (req, res) => {
+  res.json(req.user || null);
+});
+
+// Change own password
+app.put('/api/auth/password', (req, res, next) => requireAuth(req, res, next), async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    await authService.updatePassword(req.user.id, currentPassword, newPassword);
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Users (admin only) ───────────────────────────────────────────────────────────
+
+app.get('/api/users', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
+  try {
+    res.json(await authService.getAllUsers());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
+  try {
+    const { email, name, password, role } = req.body;
+    if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const user = await authService.createUser(email, name, password, role || 'member');
+    res.json(user);
+  } catch (err) {
+    res.status(err.message.includes('already in use') ? 409 : 400).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
+  try {
+    const result = await authService.updateUser(req.params.id, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
+  try {
+    // Admins cannot delete themselves
+    if (req.user && String(req.user.id) === String(req.params.id)) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    await authService.deleteUser(req.params.id);
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 // CSV helper shared by export and import
 function parseCSVLine(line) {
@@ -250,7 +389,7 @@ app.get('/api/bills', async (req, res) => {
   }
 });
 
-app.get('/api/bills/export', async (req, res) => {
+app.get('/api/bills/export', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
   try {
     const rows = await billService.getAll();
     const cols = ['id','vendor','amount','due_date','account_info','payment_method','category','notes','recurring','reminder_days','status','created_at'];
@@ -306,7 +445,7 @@ app.delete('/api/bills/:id', async (req, res) => {
   }
 });
 
-app.post('/api/bills/import', express.text({ type: ['text/csv', 'text/plain'], limit: '10mb' }), async (req, res) => {
+app.post('/api/bills/import', (req, res, next) => requireAdmin(req, res, next), express.text({ type: ['text/csv', 'text/plain'], limit: '10mb' }), async (req, res) => {
   const text = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'Empty CSV body' });
 
@@ -332,7 +471,7 @@ app.post('/api/bills/import', express.text({ type: ['text/csv', 'text/plain'], l
 
 // Backup / misc ───────────────────────────────────────────────────────────────
 
-app.get('/api/backup', async (req, res) => {
+app.get('/api/backup', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
   try {
     const rows = await dbAll(db, 'SELECT * FROM bills');
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -405,7 +544,7 @@ app.get('/api/settings', async (req, res) => {
   }
 });
 
-app.put('/api/settings', async (req, res) => {
+app.put('/api/settings', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
   const { notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync } = req.body;
   try {
     await dbRun(
@@ -440,21 +579,29 @@ app.post('/api/notifications/trigger', triggerLimiter, async (req, res) => {
 async function main() {
   await runMigrations();
 
+  // Auth
+  authService = new AuthService(db);
+  const middleware = createAuthMiddleware(authService);
+  requireAuth  = middleware.requireAuth;
+  requireAdmin = middleware.requireAdmin;
+
+  // Services
   const googleCalendarService = new GoogleCalendarService(db);
   await googleCalendarService.initialize().catch(() => {
     console.log('ℹ️  Google Calendar will remain disabled');
   });
-
   billService        = new BillService(db, googleCalendarService);
   notificationService = new NotificationService(db);
   notificationService.start();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`⚓ Billarr API running on port ${PORT}`);
-    if (process.env.BILLARR_PASSWORD) {
-      console.log('🔒 Password protection enabled');
+    if (process.env.JWT_SECRET) {
+      console.log('🔐 JWT authentication enabled');
+    } else if (process.env.BILLARR_PASSWORD) {
+      console.log('🔒 Legacy password protection enabled (set JWT_SECRET to upgrade to user accounts)');
     } else {
-      console.log('⚠️  No BILLARR_PASSWORD set — running without authentication');
+      console.log('⚠️  No authentication configured');
     }
   });
 }

@@ -6,7 +6,7 @@ import ListView from './components/ListView';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import ExpensesView from './components/ExpensesView';
-import { apiFetch } from './utils/apiFetch';
+import { apiFetch, clearAuth } from './utils/apiFetch';
 import './App.css';
 
 function App() {
@@ -17,11 +17,13 @@ function App() {
   const [editingBill, setEditingBill] = useState(null);
   const [view, setView] = useState('calendar');
   const [error, setError] = useState(null);
-  const [authPassword, setAuthPassword] = useState(() => sessionStorage.getItem('billarr-auth'));
-  const [needsAuth, setNeedsAuth] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('billarr-theme') || 'light';
-  });
+  const [theme, setTheme] = useState(() => localStorage.getItem('billarr-theme') || 'light');
+
+  // authStatus: null = loading | { mode: 'jwt'|'legacy'|'none', hasUsers: bool }
+  const [authStatus, setAuthStatus] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
+
   const API_URL = process.env.REACT_APP_API_URL || '';
 
   const showError = useCallback((message) => {
@@ -30,10 +32,27 @@ function App() {
   }, []);
 
   const handleAuthError = useCallback(() => {
-    sessionStorage.removeItem('billarr-auth');
-    setAuthPassword(null);
-    setNeedsAuth(true);
+    clearAuth();
+    setCurrentUser(null);
+    setNeedsLogin(true);
   }, []);
+
+  // Check auth status on mount
+  useEffect(() => {
+    fetch(`${API_URL}/api/auth/status`)
+      .then(r => r.json())
+      .then(status => {
+        setAuthStatus(status);
+        if (status.mode === 'none') {
+          setNeedsLogin(false);
+        } else if (status.mode === 'jwt') {
+          if (!localStorage.getItem('billarr-token')) setNeedsLogin(true);
+        } else if (status.mode === 'legacy') {
+          if (!sessionStorage.getItem('billarr-auth')) setNeedsLogin(true);
+        }
+      })
+      .catch(() => setAuthStatus({ mode: 'none' }));
+  }, [API_URL]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -44,45 +63,41 @@ function App() {
     try {
       const data = await apiFetch(`${API_URL}/api/bills`);
       setBills(data);
-      setNeedsAuth(false);
     } catch (err) {
-      if (err.status === 401) {
-        handleAuthError();
-      } else {
-        showError(`Failed to load bills: ${err.message}`);
-      }
+      if (err.status === 401) handleAuthError();
+      else showError(`Failed to load bills: ${err.message}`);
     }
   }, [API_URL, showError, handleAuthError]);
 
   useEffect(() => {
-    fetchBills();
-  }, [fetchBills, authPassword]);
+    if (authStatus && !needsLogin) fetchBills();
+  }, [authStatus, needsLogin, fetchBills]);
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+  const handleLogin = (user) => {
+    setCurrentUser(user || null);
+    setNeedsLogin(false);
   };
 
-  const handleLogin = (password) => {
-    setAuthPassword(password);
-    setNeedsAuth(false);
+  const handleLogout = () => {
+    clearAuth();
+    setCurrentUser(null);
+    setBills([]);
+    setNeedsLogin(true);
   };
 
   const handleSaveBill = async (billData) => {
     try {
-      const url = editingBill
-        ? `${API_URL}/api/bills/${editingBill.id}`
-        : `${API_URL}/api/bills`;
+      const url = editingBill ? `${API_URL}/api/bills/${editingBill.id}` : `${API_URL}/api/bills`;
       const method = editingBill ? 'PUT' : 'POST';
       await apiFetch(url, { method, body: JSON.stringify(billData) });
       fetchBills();
       setShowForm(false);
       setEditingBill(null);
     } catch (err) {
-      if (err.status === 401) {
-        handleAuthError();
-      } else {
-        showError(`Failed to save bill: ${err.message}`);
-      }
+      if (err.status === 401) handleAuthError();
+      else showError(`Failed to save bill: ${err.message}`);
     }
   };
 
@@ -93,34 +108,30 @@ function App() {
       fetchBills();
       setSelectedBill(null);
     } catch (err) {
-      if (err.status === 401) {
-        handleAuthError();
-      } else {
-        showError(`Failed to delete bill: ${err.message}`);
-      }
+      if (err.status === 401) handleAuthError();
+      else showError(`Failed to delete bill: ${err.message}`);
     }
   };
 
-  const handleEditBill = (bill) => {
-    setEditingBill(bill);
-    setShowForm(true);
-    setSelectedBill(null);
-  };
+  const handleEditBill  = (bill) => { setEditingBill(bill); setShowForm(true); setSelectedBill(null); };
+  const handleBillClick = (bill) => { setSelectedBill(bill); setShowForm(false); };
+  const handleNewBill   = ()     => { setEditingBill(null); setShowForm(true); setSelectedBill(null); };
 
-  const handleBillClick = (bill) => {
-    setSelectedBill(bill);
-    setShowForm(false);
-  };
+  // Loading auth status
+  if (!authStatus) return null;
 
-  const handleNewBill = () => {
-    setEditingBill(null);
-    setShowForm(true);
-    setSelectedBill(null);
-  };
-
-  if (needsAuth) {
-    return <Login onLogin={handleLogin} />;
+  // Show login / first-run setup
+  if (needsLogin) {
+    const loginMode = authStatus.mode === 'jwt'
+      ? (authStatus.hasUsers ? 'jwt' : 'setup')
+      : 'legacy';
+    return <Login mode={loginMode} onLogin={handleLogin} />;
   }
+
+  // isAdmin: true when auth is off, legacy mode, or user has admin role
+  const isAdmin = authStatus.mode === 'none'
+    || authStatus.mode === 'legacy'
+    || (currentUser && currentUser.role === 'admin');
 
   return (
     <div className="app">
@@ -130,22 +141,13 @@ function App() {
             <img src="/logolong.png" alt="Billarr" className="app-logo" />
           </div>
           <div className="header-actions">
-            <button
-              className={`view-toggle ${view === 'calendar' ? 'active' : ''}`}
-              onClick={() => setView('calendar')}
-            >
+            <button className={`view-toggle ${view === 'calendar' ? 'active' : ''}`} onClick={() => setView('calendar')}>
               Calendar
             </button>
-            <button
-              className={`view-toggle ${view === 'list' ? 'active' : ''}`}
-              onClick={() => setView('list')}
-            >
+            <button className={`view-toggle ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>
               List
             </button>
-            <button
-              className={`view-toggle ${view === 'expenses' ? 'active' : ''}`}
-              onClick={() => setView('expenses')}
-            >
+            <button className={`view-toggle ${view === 'expenses' ? 'active' : ''}`} onClick={() => setView('expenses')}>
               Expenses
             </button>
             <button className="btn-primary" onClick={handleNewBill}>
@@ -154,9 +156,20 @@ function App() {
             <button className="btn-theme-toggle" onClick={toggleTheme} title="Toggle theme">
               {theme === 'light' ? '🌙' : '☀️'}
             </button>
-            <button className="btn-settings" onClick={() => setShowSettings(true)}>
+            {currentUser && (
+              <div className="user-menu">
+                <span className="user-name">{currentUser.name}</span>
+                {currentUser.role === 'admin' && <span className="user-role-badge">admin</span>}
+              </div>
+            )}
+            <button className="btn-settings" onClick={() => setShowSettings(true)} title="Settings">
               ⚙️
             </button>
+            {authStatus.mode !== 'none' && (
+              <button className="btn-logout" onClick={handleLogout} title="Sign out">
+                ↩
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -172,17 +185,9 @@ function App() {
         {view === 'expenses' ? (
           <ExpensesView bills={bills} />
         ) : view === 'calendar' ? (
-          <Calendar
-            bills={bills}
-            onBillClick={handleBillClick}
-            selectedBill={selectedBill}
-          />
+          <Calendar bills={bills} onBillClick={handleBillClick} selectedBill={selectedBill} />
         ) : (
-          <ListView
-            bills={bills}
-            selectedBill={selectedBill}
-            onBillClick={handleBillClick}
-          />
+          <ListView bills={bills} selectedBill={selectedBill} onBillClick={handleBillClick} />
         )}
       </main>
 
@@ -190,10 +195,7 @@ function App() {
         <BillForm
           bill={editingBill}
           onSave={handleSaveBill}
-          onCancel={() => {
-            setShowForm(false);
-            setEditingBill(null);
-          }}
+          onCancel={() => { setShowForm(false); setEditingBill(null); }}
         />
       )}
 
@@ -210,6 +212,8 @@ function App() {
         <Settings
           onClose={() => setShowSettings(false)}
           apiUrl={API_URL}
+          isAdmin={isAdmin}
+          currentUser={currentUser}
         />
       )}
     </div>
