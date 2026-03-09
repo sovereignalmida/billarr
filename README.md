@@ -37,6 +37,30 @@ Inspired by the naming and aesthetic of the \*arr ecosystem.
 
 ---
 
+## 📸 Screenshots
+
+<div align="center">
+
+| Login | Calendar |
+|---|---|
+| [![Login](Screenshots/BillarrLogin.png)](Screenshots/BillarrLogin.png) | [![Calendar View](Screenshots/BillarrCalendarView.png)](Screenshots/BillarrCalendarView.png) |
+
+| List View | Bill Entry |
+|---|---|
+| [![List View](Screenshots/BillarrListView.png)](Screenshots/BillarrListView.png) | [![Bill Entry](Screenshots/BIllarBillEntryView.png)](Screenshots/BIllarBillEntryView.png) |
+
+| Expenses View | Reports / Dashboard |
+|---|---|
+| [![Expenses View](Screenshots/BillarrExpensesView.png)](Screenshots/BillarrExpensesView.png) | [![Reports View](Screenshots/BillarrReportsView.png)](Screenshots/BillarrReportsView.png) |
+
+| Reports Expanded | Settings |
+|---|---|
+| [![Reports Expanded](Screenshots/BillarrReportsExpanded.png)](Screenshots/BillarrReportsExpanded.png) | [![Settings](Screenshots/BillarrSettingsView.png)](Screenshots/BillarrSettingsView.png) |
+
+</div>
+
+---
+
 ## ✨ Features
 
 ### 📅 Bill Management
