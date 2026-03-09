@@ -15,6 +15,10 @@ const { dbGet, dbAll, dbRun } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust reverse proxy (Traefik/nginx) so X-Forwarded-For is handled correctly
+// by express-rate-limit and req.ip
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:8080',

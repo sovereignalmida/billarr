@@ -1,35 +1,19 @@
 import React, { useState } from 'react';
+import { apiFetch } from '../utils/apiFetch';
 import './NotificationTest.css';
 
-const NotificationTest = ({ apiUrl, onClose }) => {
+const NotificationTest = ({ apiUrl }) => {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState(null);
 
   const testNotifications = async () => {
     setTesting(true);
     setResult(null);
-    
     try {
-      const response = await fetch(`${apiUrl}/api/notifications/trigger`, {
-        method: 'POST'
-      });
-      
-      if (response.ok) {
-        setResult({
-          success: true,
-          message: 'Notification check triggered! Check your Telegram/Calendar for updates. (Note: Only sends for bills due within reminder window)'
-        });
-      } else {
-        setResult({
-          success: false,
-          message: 'Failed to trigger notifications. Check backend logs.'
-        });
-      }
-    } catch (error) {
-      setResult({
-        success: false,
-        message: `Error: ${error.message}`
-      });
+      await apiFetch(`${apiUrl}/api/notifications/trigger`, { method: 'POST' });
+      setResult({ success: true, message: 'Notification check triggered! Check your Telegram for updates. (Only sends for bills within their reminder window)' });
+    } catch (err) {
+      setResult({ success: false, message: `Failed: ${err.message}` });
     } finally {
       setTesting(false);
     }
