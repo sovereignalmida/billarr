@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: billarr-backend-dev
+    ports:
+      - "3002:3001"
+    volumes:
+      - ./data-dev:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/app/data/bills.db
+      - JWT_SECRET=dev-only-not-for-production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: billarr-frontend-dev
+    ports:
+      - "8086:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
