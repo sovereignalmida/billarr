@@ -31,24 +31,38 @@ function buildMonthData(bills, targetYear) {
     }
   });
 
-  // Project recurring bills into future months
+  // Project recurring bills into future months.
+  // Each paid recurring bill leaves behind a new actual row for the next
+  // due date, so a vendor paid monthly for 6 months has 6 rows all with
+  // recurring='monthly'. Only the most recent row per vendor+recurring
+  // series should seed forward projections — otherwise every historical
+  // row projects its own duplicate chain into the same future months.
+  const latestBySeries = new Map();
   bills
     .filter(b => b.recurring && b.recurring !== 'none')
     .forEach(bill => {
-      getYearOccurrences(bill.due_date, bill.recurring, targetYear).forEach(date => {
-        if (date <= today) return; // only project future dates
-        const m = date.getMonth();
-        // Dedup: skip if same vendor already has an actual bill in this month
-        if (months[m].actual.some(a => a.vendor === bill.vendor)) return;
-        months[m].projected.push({
-          ...bill,
-          due_date: date.toISOString().split('T')[0],
-          status: 'projected',
-          _projected: true,
-          id: `proj-${bill.id}-${date.getTime()}`,
-        });
+      const key = `${bill.vendor}|${bill.recurring}`;
+      const existing = latestBySeries.get(key);
+      if (!existing || bill.due_date > existing.due_date) {
+        latestBySeries.set(key, bill);
+      }
+    });
+
+  latestBySeries.forEach(bill => {
+    getYearOccurrences(bill.due_date, bill.recurring, targetYear).forEach(date => {
+      if (date <= today) return; // only project future dates
+      const m = date.getMonth();
+      // Dedup: skip if same vendor already has an actual bill in this month
+      if (months[m].actual.some(a => a.vendor === bill.vendor)) return;
+      months[m].projected.push({
+        ...bill,
+        due_date: date.toISOString().split('T')[0],
+        status: 'projected',
+        _projected: true,
+        id: `proj-${bill.id}-${date.getTime()}`,
       });
     });
+  });
 
   return months.map(m => {
     const all = [...m.actual, ...m.projected];
