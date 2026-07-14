@@ -12,6 +12,7 @@ services:
       - PORT=3001
       - DB_PATH=/app/data/bills.db
       - JWT_SECRET=dev-only-not-for-production
+      - PUBLIC_URL=http://localhost:3002
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]

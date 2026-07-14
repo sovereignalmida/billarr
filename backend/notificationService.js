@@ -1,5 +1,6 @@
-const fetch = require('node-fetch');
 const { getDaysUntilDue } = require('./utils/dates');
+const TelegramBotService = require('./services/telegramBotService');
+const { escapeHtml } = TelegramBotService;
 
 /*
  * BILLARR SMART NOTIFICATION SCHEDULE
@@ -21,8 +22,9 @@ const SCHEDULE = {
 };
 
 class NotificationService {
-  constructor(db) {
+  constructor(db, telegramBotService) {
     this.db = db;
+    this.telegramBotService = telegramBotService;
     this.checkInterval = null;
   }
 
@@ -209,43 +211,26 @@ class NotificationService {
   }
 
   async sendNotification(bill, settings, daysUntil) {
-    const message = this.formatMessage(bill, daysUntil);
-    if (settings.notification_method === 'telegram' || settings.notification_method === 'all') {
-      await this.sendTelegram(message, settings);
-    }
-  }
-
-  async sendTelegram(message, settings) {
-    if (!settings.telegram_bot_token || !settings.telegram_chat_id) {
+    if (settings.notification_method !== 'telegram' && settings.notification_method !== 'all') return;
+    if (!settings.telegram_chat_id) {
       console.log('⚠️  Telegram not configured');
       return;
     }
-
+    const message = this.formatMessage(bill, daysUntil);
     try {
-      const url = `https://api.telegram.org/bot${settings.telegram_bot_token}/sendMessage`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: settings.telegram_chat_id,
-          text: message,
-          parse_mode: 'Markdown'
-        })
-      });
-
-      const data = await response.json();
-      if (data.ok) {
-        console.log('✅ Telegram notification sent successfully');
-      } else {
-        console.error('❌ Telegram error:', data.description);
-      }
+      await this.telegramBotService.sendMessage(
+        settings.telegram_chat_id,
+        message,
+        TelegramBotService.billActionKeyboard(bill)
+      );
+      console.log('✅ Telegram notification sent successfully');
     } catch (error) {
       console.error('❌ Failed to send Telegram notification:', error.message);
     }
   }
 
   formatMessage(bill, daysUntil) {
-    const dueDate = new Date(bill.due_date).toLocaleDateString('en-US', {
+    const dueDate = new Date(bill.due_date + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -254,25 +239,25 @@ class NotificationService {
 
     let timePhrase;
     if (daysUntil < 0) {
-      timePhrase = `🔴 *OVERDUE by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''}*`;
+      timePhrase = `🔴 <b>OVERDUE by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''}</b>`;
     } else if (daysUntil === 0) {
-      timePhrase = '🔴 *DUE TODAY*';
+      timePhrase = '🔴 <b>DUE TODAY</b>';
     } else if (daysUntil === 1) {
-      timePhrase = '🟡 *Due Tomorrow*';
+      timePhrase = '🟡 <b>Due Tomorrow</b>';
     } else if (daysUntil <= 3) {
-      timePhrase = `🟠 *Due in ${daysUntil} days*`;
+      timePhrase = `🟠 <b>Due in ${daysUntil} days</b>`;
     } else {
       timePhrase = `🟢 Due in ${daysUntil} days`;
     }
 
-    return `💰 *Bill Reminder*\n\n` +
+    return `💰 <b>Bill Reminder</b>\n\n` +
       `${timePhrase}\n\n` +
-      `*Vendor:* ${bill.vendor}\n` +
-      `*Amount:* $${parseFloat(bill.amount).toFixed(2)}\n` +
-      `*Due Date:* ${dueDate}\n` +
-      (bill.payment_method ? `*Payment:* ${bill.payment_method}\n` : '') +
-      (bill.account_info ? `*Account:* ${bill.account_info}\n` : '') +
-      (bill.notes ? `\n📝 ${bill.notes}` : '');
+      `<b>Vendor:</b> ${escapeHtml(bill.vendor)}\n` +
+      `<b>Amount:</b> $${parseFloat(bill.amount).toFixed(2)}\n` +
+      `<b>Due Date:</b> ${dueDate}\n` +
+      (bill.payment_method ? `<b>Payment:</b> ${escapeHtml(bill.payment_method)}\n` : '') +
+      (bill.account_info ? `<b>Account:</b> ${escapeHtml(bill.account_info)}\n` : '') +
+      (bill.notes ? `\n📝 ${escapeHtml(bill.notes)}` : '');
   }
 
   getDaysUntilDue(dueDate) {

@@ -10,6 +10,7 @@ const AuthService = require('./services/authService');
 const CategoryService = require('./services/categoryService');
 const PaymentMethodService = require('./services/paymentMethodService');
 const ReportService = require('./services/reportService');
+const TelegramBotService = require('./services/telegramBotService');
 const createAuthMiddleware = require('./middleware/auth');
 const { dbGet, dbAll, dbRun } = require('./db');
 const { runMigrations } = require('./db/migrations');
@@ -46,6 +47,11 @@ const triggerLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   message: { error: 'Too many trigger requests' },
+});
+const telegramWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Too many requests' },
 });
 app.use('/api', apiLimiter);
 
@@ -95,6 +101,7 @@ let categoryService;
 let paymentMethodService;
 let reportService;
 let notificationService;
+let telegramBotService;
 let requireAuth = (req, res, next) => next(); // overwritten in main()
 let requireAdmin = (req, res, next) => next(); // overwritten in main()
 
@@ -385,12 +392,22 @@ app.get('/api/settings', async (req, res) => {
 app.put('/api/settings', (req, res, next) => requireAdmin(req, res, next), async (req, res) => {
   const { notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync } = req.body;
   try {
+    const existing = await dbGet(db, 'SELECT telegram_webhook_secret FROM settings WHERE id = 1');
+    const webhookSecret = existing?.telegram_webhook_secret || crypto.randomBytes(24).toString('hex');
+
     await dbRun(
       db,
       `UPDATE settings SET notification_method = ?, telegram_chat_id = ?,
-       telegram_bot_token = ?, google_calendar_sync = ? WHERE id = 1`,
-      [notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync]
+       telegram_bot_token = ?, google_calendar_sync = ?, telegram_webhook_secret = ? WHERE id = 1`,
+      [notification_method, telegram_chat_id, telegram_bot_token, google_calendar_sync, webhookSecret]
     );
+
+    if (telegram_bot_token && process.env.PUBLIC_URL) {
+      telegramBotService
+        .registerWebhook(process.env.PUBLIC_URL, webhookSecret, telegram_bot_token)
+        .catch(err => console.error('❌ Telegram webhook registration failed:', err.message));
+    }
+
     res.json({ message: 'Settings updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -410,6 +427,27 @@ app.post('/api/notifications/trigger', triggerLimiter, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── Telegram webhook ───────────────────────────────────────────────────────
+// Deliberately outside /api — Telegram's own calls carry no JWT/Basic-Auth
+// credential, so this route sits alongside /health, gated instead by the
+// secret-token header Telegram sends back verbatim (set via setWebhook).
+app.post('/telegram/webhook', telegramWebhookLimiter, async (req, res) => {
+  let settings;
+  try {
+    settings = await dbGet(db, 'SELECT * FROM settings WHERE id = 1');
+  } catch (err) {
+    console.error('❌ Telegram webhook settings lookup error:', err.message);
+    return res.sendStatus(500);
+  }
+  const secret = req.headers['x-telegram-bot-api-secret-token'];
+  if (!settings?.telegram_webhook_secret || secret !== settings.telegram_webhook_secret) {
+    return res.sendStatus(401);
+  }
+  res.sendStatus(200); // ack immediately; Telegram retries on non-200/slow response
+  telegramBotService.handleUpdate(req.body)
+    .catch(err => console.error('❌ Telegram webhook update error:', err.message));
 });
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
@@ -432,7 +470,8 @@ async function main() {
   categoryService     = new CategoryService(db);
   paymentMethodService = new PaymentMethodService(db);
   reportService       = new ReportService(db);
-  notificationService = new NotificationService(db);
+  telegramBotService  = new TelegramBotService(db, billService, reportService);
+  notificationService = new NotificationService(db, telegramBotService);
   notificationService.start();
 
   app.listen(PORT, '0.0.0.0', () => {

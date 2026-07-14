@@ -291,8 +291,8 @@ const Settings = ({ onClose, apiUrl, isAdmin = true, currentUser = null }) => {
                   </div>
                   <div className="form-group">
                     <label>Telegram Chat ID</label>
-                    <input type="text" name="telegram_chat_id" value={settings.telegram_chat_id || ''} onChange={handleChange} placeholder="Enter your chat ID" />
-                    <small>Use @userinfobot to get your chat ID</small>
+                    <input type="text" name="telegram_chat_id" value={settings.telegram_chat_id || ''} onChange={handleChange} placeholder="Auto-fills after you message the bot" />
+                    <small>Save your bot token, then send /start to your bot — this fills in automatically. (Or paste one manually from @userinfobot.)</small>
                   </div>
                 </>
               )}

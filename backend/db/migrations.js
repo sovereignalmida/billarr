@@ -100,6 +100,10 @@ const MIGRATIONS = [
   {
     name: '009_add_on_hold',
     sql: [`ALTER TABLE bills ADD COLUMN on_hold INTEGER DEFAULT 0`]
+  },
+  {
+    name: '010_telegram_webhook_secret',
+    sql: [`ALTER TABLE settings ADD COLUMN telegram_webhook_secret TEXT`]
   }
 ];
 
