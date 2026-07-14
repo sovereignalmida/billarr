@@ -73,7 +73,7 @@ server {
 }
 ```
 
-3. **Update docker compose.yml** to only expose to localhost:
+3. **Update docker-compose.yml** to only expose to localhost:
 
 ```yaml
 services:
@@ -97,23 +97,35 @@ yourdomain.com {
 
 ### Option 3: Using Traefik
 
-See the included `docker compose.traefik.yml` for a complete setup with automatic HTTPS.
+Add labels to the `frontend` service in your `docker-compose.yml` (assumes a Traefik instance
+already running on the `docker` provider, with a certificate resolver configured):
+
+```yaml
+services:
+  frontend:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.billarr.rule=Host(`billarr.yourdomain.com`)
+      - traefik.http.routers.billarr.tls.certresolver=letsencrypt
+      - traefik.http.services.billarr.loadbalancer.server.port=80
+    networks:
+      - your-traefik-network
+```
 
 ## Environment Variables
 
-Create a `.env` file for custom configuration:
+The full list of environment variables (auth modes, ports, CORS) is in [README.md](README.md#configuration).
+The one deployment-specific variable worth calling out here:
 
-```env
-# Backend
-PORT=3001
-DB_PATH=/app/data/bills.db
+- **`PUBLIC_URL`** — set this to your public HTTPS URL (e.g. `https://billarr.yourdomain.com`) if
+  you want the Telegram bot's two-way features (buttons, slash commands). Without it, Billarr still
+  works fully — outbound reminders are unaffected — the bot just can't receive anything back. See
+  [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md).
 
-# Frontend
-REACT_APP_API_URL=http://localhost:8080
-
-# Docker
-COMPOSE_PROJECT_NAME=bill-tracker
-```
+Note: `REACT_APP_API_URL` is **not** a usable runtime variable here — it's a Create React App
+build-time setting, and the frontend is a static build served by nginx (which proxies `/api`
+internally to the backend container, see `frontend/nginx.conf`). Setting it as a runtime
+`environment:` entry on the pre-built image does nothing.
 
 ## Updating
 
@@ -168,7 +180,7 @@ The backend includes a health endpoint:
 curl http://localhost:3001/health
 ```
 
-Response: `{"status":"ok","timestamp":"2024-..."}`
+Response: `{"status":"ok","timestamp":"2026-07-14T..."}`
 
 ### Container Logs
 
@@ -193,7 +205,7 @@ docker stats billarr-backend billarr-frontend
 
 ### Port Already in Use
 
-Change ports in `docker compose.yml`:
+Change ports in `docker-compose.yml`:
 
 ```yaml
 services:
@@ -242,7 +254,7 @@ docker compose up -d --build
 
 ### For Heavy Usage
 
-In `docker compose.yml`, increase resources:
+In `docker-compose.yml`, increase resources:
 
 ```yaml
 services:

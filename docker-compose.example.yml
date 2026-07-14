@@ -6,7 +6,7 @@ services:
     container_name: billarr-backend
     labels:
       - "com.billarr.description=Billarr Backend API"
-      - "com.billarr.version=2.0.0"
+      - "com.billarr.version=2.2.0"
     ports:
       - "3001:3001"
     volumes:
@@ -15,8 +15,14 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DB_PATH=/app/data/bills.db
-      # Uncomment and set a password to enable authentication:
-      # - BILLARR_PASSWORD=changeme
+      # Auth — pick one (see README.md#authentication):
+      # - JWT_SECRET=change-this-to-a-long-random-string   # recommended; generate with: openssl rand -hex 32
+      # - BILLARR_PASSWORD=changeme                        # legacy single-password
+      # Set to your public HTTPS URL to enable the Telegram bot's two-way
+      # features (buttons, slash commands) — see TELEGRAM_SETUP.md:
+      # - PUBLIC_URL=https://billarr.yourdomain.com
+      # Only needed if your frontend is reachable at a non-default URL:
+      # - CORS_ORIGIN=http://localhost:8080
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
@@ -32,7 +38,7 @@ services:
     container_name: billarr-frontend
     labels:
       - "com.billarr.description=Billarr Frontend Web Interface"
-      - "com.billarr.version=2.0.0"
+      - "com.billarr.version=2.2.0"
     ports:
       - "8080:80"
     depends_on:

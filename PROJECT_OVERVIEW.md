@@ -12,48 +12,55 @@ A complete, production-ready bill tracking application with:
 - 💾 SQLite database for data persistence
 - 🐳 Docker deployment (just run `docker-compose up`)
 - 📱 Fully responsive mobile design
-- 🔔 Notification support (Telegram, WhatsApp, Google Calendar)
+- 🔔 Two-way Telegram bot (buttons + slash commands) and Google Calendar sync
 
 ## 📁 Project Structure
 
 ```
 billarr/
-├── logo.png                   # Main logo
-├── logo-circle.png            # Circular variant
+├── logo.png                    # Main logo
 ├── backend/                    # Node.js/Express API
-│   ├── server.js              # Main server file
-│   ├── package.json           # Dependencies
-│   ├── Dockerfile             # Container config
+│   ├── server.js               # Routes; wires services together
+│   ├── notificationService.js  # Reminder scheduler
+│   ├── googleCalendarService.js
+│   ├── services/               # Business logic, one class per domain
+│   │   ├── billService.js
+│   │   ├── reportService.js    # Dashboard/summary/trends queries
+│   │   ├── telegramBotService.js  # Bot commands, buttons, webhook
+│   │   ├── authService.js
+│   │   ├── categoryService.js
+│   │   └── paymentMethodService.js
+│   ├── middleware/auth.js      # JWT/admin guards
+│   ├── db/
+│   │   ├── migrations.js       # Versioned schema migrations, auto-backup
+│   │   └── index.js            # dbGet/dbAll/dbRun promise wrappers
+│   ├── utils/
+│   │   ├── dates.js            # Recurring-date math, shared with frontend
+│   │   └── csv.js
+│   ├── package.json
+│   ├── Dockerfile
 │   └── .dockerignore
 │
 ├── frontend/                   # React application
-│   ├── public/
-│   │   └── index.html         # HTML template
+│   ├── public/index.html
 │   ├── src/
-│   │   ├── components/        # React components
-│   │   │   ├── Calendar.js    # Calendar view
-│   │   │   ├── Calendar.css
-│   │   │   ├── BillForm.js    # Add/Edit form
-│   │   │   ├── BillForm.css
-│   │   │   ├── BillDetails.js # Bill detail modal
-│   │   │   ├── BillDetails.css
-│   │   │   ├── Settings.js    # Settings modal
-│   │   │   └── Settings.css
-│   │   ├── App.js             # Main app component
-│   │   ├── App.css            # Main styles
-│   │   ├── index.js           # React entry point
-│   │   └── index.css          # Global styles
-│   ├── package.json           # Dependencies
-│   ├── Dockerfile             # Container config
-│   ├── nginx.conf             # Web server config
-│   └── .dockerignore
+│   │   ├── components/         # Calendar, ListView, ExpensesView,
+│   │   │                       # Dashboard, BillForm, BillDetails,
+│   │   │                       # Settings, Login, NotificationTest
+│   │   ├── utils/dates.js
+│   │   ├── App.js
+│   │   └── index.js
+│   ├── nginx.conf              # Proxies /api, /health, /telegram/webhook to backend
+│   ├── package.json
+│   └── Dockerfile
 │
-├── docker-compose.yml         # Multi-container setup
-├── start.sh                   # Quick start script
-├── README.md                  # User documentation
-├── DEPLOYMENT.md              # Deployment guide
+├── docker-compose.example.yml  # Copy to docker-compose.yml to deploy
+├── docker-compose.dev.yml      # Isolated local build/dev loop
+├── start.sh                    # Quick start script
+├── README.md                   # User documentation
+├── DEPLOYMENT.md                # Deployment guide
+├── CHANGELOG.md
 └── .gitignore
-
 ```
 
 ## 🎨 Design Features
@@ -118,32 +125,36 @@ That's it! 🎉
 
 ## 📊 Database Schema
 
+Schema is versioned in `backend/db/migrations.js` — that file is the source of truth; a
+timestamped JSON backup is written to `./data/` before every migration run. Summary:
+
 ### Bills Table
 ```sql
 - id (PRIMARY KEY)
-- vendor (TEXT)
-- amount (REAL)
-- due_date (TEXT)
-- account_info (TEXT)
-- payment_method (TEXT)
-- category (TEXT)
-- notes (TEXT)
-- recurring (TEXT)
-- reminder_days (INTEGER)
-- status (TEXT)
+- vendor (TEXT), amount (REAL), due_date (TEXT)
+- account_info, payment_method, category, notes (TEXT)
+- recurring (TEXT: none/weekly/monthly/quarterly/annually)
+- reminder_days (INTEGER), status (TEXT: pending/paid/overdue)
+- auto_renew (INTEGER), cancellation_url (TEXT)     -- subscription metadata
+- on_hold (INTEGER)                                  -- pause future recurring occurrences
+- snoozed_until (TEXT)                               -- temporarily silence reminders
+- calendar_event_id (TEXT), last_notified_at (DATETIME)
 - created_at (DATETIME)
 ```
 
 ### Settings Table
 ```sql
 - id (PRIMARY KEY)
-- notification_method (TEXT)
-- telegram_chat_id (TEXT)
-- telegram_bot_token (TEXT)
-- whatsapp_number (TEXT)
-- google_calendar_sync (INTEGER)
+- notification_method (TEXT), google_calendar_sync (INTEGER)
+- telegram_chat_id, telegram_bot_token (TEXT)
+- telegram_webhook_secret (TEXT)   -- verifies inbound webhook calls are really from Telegram
 - created_at (DATETIME)
 ```
+
+### Other tables
+`categories`, `payment_methods` (user-defined, dynamic), `users` (JWT accounts, admin/member
+roles), `bill_amount_history` (records every price change per bill), `migrations` (tracks which
+migrations have run).
 
 ## 🌟 Key Features
 
@@ -156,16 +167,22 @@ That's it! 🎉
 
 ### Bill Management
 - Create, read, update, delete
-- Recurring bill support
+- Recurring bill support, with a Hold action to pause future occurrences
 - Categories and tags
 - Custom reminder timing
 - Status tracking (pending/paid/overdue)
 
+### Dashboard & Reporting
+- Summary cards, 6-month spend trend bars, category breakdown
+- Subscription table with monthly-equivalent normalisation
+- Price change history
+- Annual Expenses view: 12-month grid with recurring projections and CSV export
+
 ### Notifications (Configurable)
-- Telegram bot integration
-- WhatsApp support
+- Two-way Telegram bot — inline buttons (Mark Paid / Hold / Snooze) and slash commands
+  (`/due`, `/summary`, `/paid <vendor>`, etc.), delivered via webhook
 - Google Calendar sync
-- Customizable reminder timing
+- Customizable reminder timing per bill
 
 ### Mobile Experience
 - Touch-friendly interface
@@ -219,16 +236,13 @@ Edit backend notification scheduling in `server.js`
 
 ## 🤝 Contributing Ideas
 
-Want to extend this? Consider adding:
+Already built: dark mode, multi-user accounts, CSV import/export, custom categories, and price
+change history. Want to extend this further? Consider adding:
 - Email notifications
 - Bill splitting features
 - Budget tracking
-- Expense categories
-- Payment history charts
 - PDF export
-- Import from CSV
-- Multi-user support
-- Dark mode toggle
+- Discord/webhook notifications
 
 ## 📞 Support Resources
 
