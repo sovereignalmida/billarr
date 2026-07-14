@@ -153,12 +153,22 @@ class ReportService {
   }
 
   async _subscriptions() {
+    // A vendor paid monthly for N months has N rows all recurring='monthly'
+    // (the backend auto-creates the next row on each payment). Only the
+    // most recent row per vendor+recurring series represents the current
+    // subscription state — list that one, not every historical instance.
     const rows = await dbAll(
       this.db,
       `SELECT id, vendor, amount, due_date, category, payment_method,
-              recurring, status, auto_renew, cancellation_url, notes
-       FROM bills
+              recurring, status, auto_renew, cancellation_url, notes, on_hold
+       FROM bills b
        WHERE recurring != 'none'
+         AND id = (
+           SELECT b2.id FROM bills b2
+           WHERE b2.vendor = b.vendor AND b2.recurring = b.recurring
+           ORDER BY b2.due_date DESC, b2.id DESC
+           LIMIT 1
+         )
        ORDER BY vendor ASC`
     );
 

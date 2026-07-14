@@ -16,6 +16,7 @@ const BillForm = ({ bill, onSave, onCancel }) => {
     status: 'pending',
     auto_renew: false,
     cancellation_url: '',
+    on_hold: false,
   });
 
   const [categories, setCategories] = useState([]);
@@ -43,6 +44,7 @@ const BillForm = ({ bill, onSave, onCancel }) => {
         status: bill.status || 'pending',
         auto_renew: !!bill.auto_renew,
         cancellation_url: bill.cancellation_url || '',
+        on_hold: !!bill.on_hold,
       });
     }
   }, [bill]);
@@ -306,6 +308,22 @@ const BillForm = ({ bill, onSave, onCancel }) => {
                   onChange={handleChange}
                   placeholder="https://..."
                 />
+              </div>
+            </div>
+          )}
+
+          {formData.recurring !== 'none' && (
+            <div className="form-row">
+              <div className="form-group form-group-checkbox">
+                <label className="checkbox-label" title="Pause this recurring series — no future occurrences will be projected until you uncheck this">
+                  <input
+                    type="checkbox"
+                    name="on_hold"
+                    checked={formData.on_hold}
+                    onChange={handleChange}
+                  />
+                  On hold (pause future occurrences)
+                </label>
               </div>
             </div>
           )}

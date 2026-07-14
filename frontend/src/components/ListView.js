@@ -88,6 +88,7 @@ const ListView = ({ bills, selectedBill, onBillClick }) => {
             >
               <div className="bill-card-header">
                 <h3>{bill.vendor}</h3>
+                {bill.on_hold && <span className="status-badge on-hold">on hold</span>}
                 <span className={`status-badge ${bill.status}`}>{bill.status}</span>
               </div>
               <div className="bill-card-body">

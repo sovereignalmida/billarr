@@ -67,17 +67,17 @@ class BillService {
 
   async create(data) {
     const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days,
-            auto_renew, cancellation_url } = data;
+            auto_renew, cancellation_url, on_hold } = data;
 
     const { lastID } = await dbRun(
       this.db,
-      `INSERT INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, auto_renew, cancellation_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bills (vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, auto_renew, cancellation_url, on_hold)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [vendor, amount, due_date, account_info, payment_method, category, notes, recurring || 'none', reminder_days ?? 3,
-       auto_renew ? 1 : 0, cancellation_url || null]
+       auto_renew ? 1 : 0, cancellation_url || null, on_hold ? 1 : 0]
     );
 
-    const bill = { id: lastID, vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status: 'pending', auto_renew: auto_renew ? 1 : 0, cancellation_url: cancellation_url || null };
+    const bill = { id: lastID, vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status: 'pending', auto_renew: auto_renew ? 1 : 0, cancellation_url: cancellation_url || null, on_hold: on_hold ? 1 : 0 };
 
     if (this.gcal) {
       const eventId = await this.gcal.syncBill(bill, 'create').catch(() => null);
@@ -91,6 +91,7 @@ class BillService {
 
   async update(id, data, existingBill) {
     const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status } = data;
+    const onHold = data.on_hold !== undefined ? !!data.on_hold : !!existingBill.on_hold;
 
     await recordAmountChange(this.db, id, existingBill.amount, amount);
 
@@ -98,11 +99,12 @@ class BillService {
       this.db,
       `UPDATE bills SET vendor = ?, amount = ?, due_date = ?, account_info = ?,
        payment_method = ?, category = ?, notes = ?, recurring = ?, reminder_days = ?, status = ?,
-       auto_renew = ?, cancellation_url = ?
+       auto_renew = ?, cancellation_url = ?, on_hold = ?
        WHERE id = ?`,
       [vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status,
        data.auto_renew ?? existingBill.auto_renew ?? 0,
        data.cancellation_url !== undefined ? data.cancellation_url : existingBill.cancellation_url,
+       onHold ? 1 : 0,
        id]
     );
 
@@ -119,10 +121,11 @@ class BillService {
       }
     }
 
-    // Auto-create next bill when a recurring bill is marked paid
+    // Auto-create next bill when a recurring bill is marked paid.
+    // Skipped while on_hold — a paused series shouldn't spawn its successor.
     let nextBillCreated = false;
     const wasJustPaid = status === 'paid' && existingBill.status !== 'paid';
-    if (wasJustPaid && recurring && recurring !== 'none') {
+    if (wasJustPaid && recurring && recurring !== 'none' && !onHold) {
       const newDue = nextDueDateStr(due_date, recurring);
       if (newDue) {
         await dbRun(

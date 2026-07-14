@@ -179,6 +179,7 @@ const Dashboard = ({ onAuthError }) => {
               <span>Amount</span>
               <span>/mo equiv</span>
               <span>Auto-renew</span>
+              <span>On hold</span>
             </div>
             {subs.map(s => (
               <div key={s.id} className="subs-row">
@@ -212,6 +213,9 @@ const Dashboard = ({ onAuthError }) => {
                   {s.auto_renew
                     ? <span className="badge-autorenew on">on</span>
                     : <span className="badge-autorenew off">off</span>}
+                </div>
+                <div>
+                  {s.on_hold && <span className="status-badge on-hold">on hold</span>}
                 </div>
               </div>
             ))}

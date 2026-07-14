@@ -10,7 +10,7 @@ function buildProjectedBills(bills, year, month) {
   const projected = [];
 
   bills
-    .filter(b => b.recurring && b.recurring !== 'none' && b.status !== 'paid')
+    .filter(b => b.recurring && b.recurring !== 'none' && b.status !== 'paid' && !b.on_hold)
     .forEach(bill => {
       let cur = new Date(bill.due_date + 'T12:00:00');
       for (let i = 0; i < 600; i++) {

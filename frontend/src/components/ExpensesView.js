@@ -49,6 +49,7 @@ function buildMonthData(bills, targetYear) {
     });
 
   latestBySeries.forEach(bill => {
+    if (bill.on_hold) return; // paused series: no future projections until resumed
     getYearOccurrences(bill.due_date, bill.recurring, targetYear).forEach(date => {
       if (date <= today) return; // only project future dates
       const m = date.getMonth();

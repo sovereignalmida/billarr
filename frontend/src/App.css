@@ -427,6 +427,12 @@ body {
   border: 1px solid var(--color-overdue-border);
 }
 
+.status-badge.on-hold {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
 .bill-card-body .amount {
   font-size: 1.875rem;
   font-weight: 700;

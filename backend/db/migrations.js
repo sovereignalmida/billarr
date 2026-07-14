@@ -96,6 +96,10 @@ const MIGRATIONS = [
       `ALTER TABLE bills ADD COLUMN auto_renew INTEGER DEFAULT 0`,
       `ALTER TABLE bills ADD COLUMN cancellation_url TEXT`
     ]
+  },
+  {
+    name: '009_add_on_hold',
+    sql: [`ALTER TABLE bills ADD COLUMN on_hold INTEGER DEFAULT 0`]
   }
 ];
 
