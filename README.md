@@ -176,6 +176,20 @@ cp docker-compose.example.yml docker-compose.yml
 docker compose up -d --build
 ```
 
+### Local development
+
+`docker-compose.dev.yml` builds both services from source and runs them on separate
+container names, ports, and a dedicated `data-dev/` directory — safe to run side-by-side with a
+production instance with zero collision:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+# Backend:  http://localhost:3002
+# Frontend: http://localhost:8086
+```
+
+Iterate freely; tear down with `docker compose -f docker-compose.dev.yml down` when you're done.
+
 ---
 
 ## 🔐 Authentication

@@ -26,17 +26,26 @@ fi
 
 echo ""
 
+# Create docker-compose.yml from the example if it doesn't exist yet
+if [ ! -f "./docker-compose.yml" ]; then
+    cp docker-compose.example.yml docker-compose.yml
+    echo "📄 Created docker-compose.yml from docker-compose.example.yml"
+fi
+
 # Create data directory if it doesn't exist
 if [ ! -d "./data" ]; then
     mkdir -p ./data
     echo "📁 Created data directory"
 fi
 
-echo "🏗️  Building and starting containers..."
+echo "🏗️  Pulling pre-built images and starting containers..."
 echo ""
 
-# Build and start containers
-$COMPOSE_CMD up -d --build
+# Pull pre-built images and start (docker-compose.example.yml uses ghcr.io
+# images by default — no build step needed unless you've swapped in a
+# build: block yourself)
+$COMPOSE_CMD pull
+$COMPOSE_CMD up -d
 
 # Wait for services to be ready
 echo ""

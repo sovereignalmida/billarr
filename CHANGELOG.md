@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No unreleased changes.
+
+---
+
+## [2.1.1] - 2026-07-14
+
+### Fixed
+- **Telegram webhook 405** — `billarr.casaalmida.com`-style deployments serve the public domain through the frontend's nginx container, which only proxied `/api` and `/health` to the backend. `/telegram/webhook` fell through to the SPA catch-all, which rejects any non-GET method with 405, so bot commands and button taps never reached the backend. Added the missing `location /telegram/webhook` proxy rule to `frontend/nginx.conf`.
+
+---
+
+## [2.1.0] - 2026-07-14
+
+### Added
+- **Two-way Telegram bot** — new `TelegramBotService` owns all Telegram I/O (previously push-only via `notificationService.js`)
+- **Inline buttons on reminder messages** — "✅ Mark Paid" / "⏸ Hold", wired to the same `BillService.update()` the web UI uses
+- **Slash commands** — `/start`, `/help`, `/due`, `/overdue`, `/summary`, `/paid <vendor>`, `/hold <vendor>`, `/resume <vendor>`
+- **Auto chat-ID capture** — sending `/start` saves your chat ID automatically; no more manually looking it up via @userinfobot
+- **Webhook-based delivery** — `POST /telegram/webhook` (outside the `/api` JWT gate, like `/health`), gated by a per-install secret token Telegram echoes back on every call. Auto-registered against Telegram whenever a bot token is saved in Settings, if `PUBLIC_URL` is set.
+- New `PUBLIC_URL` environment variable — the externally-reachable URL Billarr registers with Telegram for the webhook
+
+### Changed
+- Outbound Telegram messages switched from Markdown to HTML `parse_mode`, fixing a real bug where vendor names containing `_`, `*`, `(`, etc. could fail to send (Markdown v1 requires escaping those characters; HTML only needs `&`/`<`/`>`)
+
+---
+
+## [2.0.2] - 2026-07-14
+
+### Added
+- **`on_hold` flag for recurring bills** — pause a recurring series (e.g. a subscription you've paused) without deleting it or losing its history. While held, the calendar and expenses-rollup projections stop generating future occurrences, and paying the bill no longer auto-creates its successor. Toggle from the bill edit form.
+
+### Fixed
+- **Dashboard "Recurring Bills" table listed every historical instance of a vendor**, not just the current one — same root cause as the [2.0.1] expenses-rollup bug (`reportService.js`'s subscriptions query wasn't narrowed to the latest row per vendor+recurring series).
+
+---
+
+## [2.0.1] - 2026-07-14
+
+### Fixed
+- **Duplicate projected recurring bills in the expenses rollup and calendar view** — every historical instance of a recurring bill (each paid month leaves behind a new row) was independently seeding its own forward projection, so a vendor paid monthly for 6 months would show up to 6 duplicate projected entries in a future month. Now only the most recent row per vendor+recurring series seeds projections.
+
+---
+
+## [2.0.0] - 2026-07-13
+
 ### Added
 - **Dashboard view** — summary cards, 6-month spend trend bars, category breakdown chart, subscription table, price change history
 - **Subscription management** — `auto_renew` flag and `cancellation_url` per recurring bill; shown in BillForm when recurring is set
@@ -18,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **User management** (admin) — create, edit role, and delete users from Settings
 - **Custom categories and payment methods** — create new entries inline from the bill form
 - **Annual Expenses view** — 12-month grid with recurring bill projections, paid/pending bars, drill-down, and CSV export
+- **Semver-tagged GHCR releases** — tagging `v*.*.*` now also publishes `{major}`, `{major}.{minor}`, and the full version as image tags, alongside the existing `latest`/`sha-` tags, so deployments can pin a stable version
+- **`docker-compose.dev.yml`** — isolated local dev/build loop (separate containers, ports, and data directory) that runs safely alongside a production instance
 
 ### Changed
 - Migrations extracted from `server.js` into `backend/db/migrations.js`
@@ -53,5 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/sovereignalmida/billarr/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sovereignalmida/billarr/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/sovereignalmida/billarr/compare/v2.1.0...v2.1.1
+[2.1.0]: https://github.com/sovereignalmida/billarr/compare/v2.0.2...v2.1.0
+[2.0.2]: https://github.com/sovereignalmida/billarr/compare/v2.0.1...v2.0.2
+[2.0.1]: https://github.com/sovereignalmida/billarr/compare/v2.0.0...v2.0.1
+[2.0.0]: https://github.com/sovereignalmida/billarr/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/sovereignalmida/billarr/releases/tag/v1.0.0

@@ -4,13 +4,12 @@ Complete guide to setting up and using notifications in Billarr.
 
 ## Overview
 
-Billarr supports three notification methods:
+Billarr supports two notification methods:
 
-1. **📱 Telegram** - Instant messages to your phone/desktop (FREE)
+1. **📱 Telegram** - Instant messages to your phone/desktop, with reply buttons and slash commands (FREE)
 2. **📅 Google Calendar** - Automatic calendar events with reminders (FREE)
-3. **📲 WhatsApp** - Coming soon!
 
-You can use one, multiple, or all notification methods simultaneously.
+You can use one or both simultaneously.
 
 ---
 
@@ -19,7 +18,7 @@ You can use one, multiple, or all notification methods simultaneously.
 The notification system runs automatically in the background:
 
 ### Timing
-- ⏰ Checks every **1 hour** automatically
+- ⏰ Checks every **30 minutes** automatically
 - 🚀 Also checks immediately when the backend starts
 - 🧪 Can be triggered manually for testing
 
@@ -37,7 +36,7 @@ The scheduler will send notifications for bills that meet ALL these conditions:
 - Each day gets one reminder (no spam!)
 
 ### What Happens
-1. Scheduler wakes up every hour
+1. Scheduler wakes up every 30 minutes
 2. Checks database for bills needing reminders
 3. Sends Telegram messages (if configured)
 4. Logs results to console
@@ -52,10 +51,9 @@ The scheduler will send notifications for bills that meet ALL these conditions:
 **Quick Steps:**
 1. Message @BotFather → `/newbot`
 2. Get bot token
-3. Message @userinfobot → Get chat ID
-4. **Start your bot** (send `/start`)
-5. Enter credentials in Billarr Settings
-6. Save and test!
+3. Enter it in Billarr Settings, save
+4. Send `/start` to your bot — your chat ID is captured automatically
+5. Test!
 
 **📖 Full Guide:** [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)
 
@@ -72,7 +70,13 @@ Payment: Credit Card
 Account: #123456
 
 📝 Notes appear here
+
+[✅ Mark Paid]  [⏸ Hold]
 ```
+
+Reminders are two-way — tap a button, or send `/due`, `/summary`, `/paid <vendor>`, `/hold <vendor>`
+etc. directly to the bot. Buttons and commands need a public HTTPS `PUBLIC_URL` set (see
+[TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)); outbound reminders work regardless.
 
 ---
 
@@ -110,7 +114,7 @@ Account: #123456
 
 2. **Telegram Settings** (if using Telegram)
    - Bot Token - From @BotFather
-   - Chat ID - From @userinfobot
+   - Chat ID - Auto-filled after you send `/start` to your bot (or paste one manually from @userinfobot)
 
 3. **Google Calendar Sync** (if using Calendar)
    - Check the box to enable
@@ -167,7 +171,7 @@ The scheduler runs on startup.
    - Due date: Tomorrow
    - Reminder days: 1
    - Status: Pending
-2. Wait up to 1 hour (or trigger manually)
+2. Wait up to 30 minutes (or trigger manually)
 3. Check for notification
 
 ---
@@ -248,15 +252,14 @@ Set method to "all" to use both Telegram and Calendar:
 
 ### Customizing Check Frequency
 
-Default: Every hour
+Default: Every 30 minutes
 
 To change, edit `/backend/notificationService.js`:
 
 ```javascript
-// Line ~17 - Change interval
 this.checkInterval = setInterval(() => {
   this.checkAndNotify();
-}, 30 * 60 * 1000); // 30 minutes instead of 60
+}, 15 * 60 * 1000); // e.g. 15 minutes instead of 30
 ```
 
 Then rebuild: `docker compose up -d --build`
@@ -353,7 +356,7 @@ A: Not yet, but it's on the roadmap!
 A: No, use whichever you prefer. Or use both!
 
 **Q: What happens if the backend restarts?**  
-A: Scheduler starts fresh. It will catch up on the next hourly check.
+A: Scheduler starts fresh. It will catch up on the next 30-minute check.
 
 **Q: Can I use this for multiple people?**  
 A: Each person needs their own chat ID. For Calendar, share with multiple service accounts.
@@ -374,7 +377,6 @@ A: Telegram bot tokens don't expire unless revoked. Google Calendar tokens may n
 
 Planned features:
 - 📧 Email notifications
-- 📲 WhatsApp via Twilio
 - 🔔 Discord webhooks
 - 📊 Weekly summary reports
 - ⏰ Custom notification times
