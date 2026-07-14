@@ -28,6 +28,14 @@ function fmtDate(dueDate) {
   });
 }
 
+/** Today + N days, as a YYYY-MM-DD string. */
+function addDays(days) {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
 class TelegramBotService {
   constructor(db, billService, reportService) {
     this.db = db;
@@ -140,6 +148,7 @@ class TelegramBotService {
         case '/paid':     return await this._cmdSetStatus(chatId, arg, 'paid');
         case '/hold':     return await this._cmdSetHold(chatId, arg, true);
         case '/resume':   return await this._cmdSetHold(chatId, arg, false);
+        case '/snooze':   return await this._cmdSnooze(chatId, rest);
         default:
           if (cmd.startsWith('/')) return await this.sendMessage(chatId, "Unknown command. Send /help to see what I can do.");
       }
@@ -169,8 +178,9 @@ class TelegramBotService {
       '/summary — spend summary\n' +
       '/paid &lt;vendor&gt; — mark a bill as paid\n' +
       '/hold &lt;vendor&gt; — pause a recurring bill\n' +
-      '/resume &lt;vendor&gt; — resume a paused bill\n\n' +
-      'Reminder messages also have ✅ Mark Paid / ⏸ Hold buttons you can tap directly.'
+      '/resume &lt;vendor&gt; — resume a paused bill\n' +
+      '/snooze &lt;vendor&gt; [days] — silence reminders for a bit (default 1 day)\n\n' +
+      'Reminder messages also have ✅ Mark Paid / ⏸ Hold / 😴 Snooze buttons you can tap directly.'
     );
   }
 
@@ -253,13 +263,42 @@ class TelegramBotService {
     );
   }
 
+  async _cmdSnooze(chatId, restWords) {
+    if (restWords.length === 0) return this.sendMessage(chatId, 'Usage: /snooze &lt;vendor&gt; [days]');
+
+    let days = 1;
+    let words = restWords;
+    const last = restWords[restWords.length - 1];
+    if (/^\d+$/.test(last)) {
+      days = Math.max(1, Math.min(30, parseInt(last, 10)));
+      words = restWords.slice(0, -1);
+    }
+    const vendorQuery = words.join(' ');
+    if (!vendorQuery) return this.sendMessage(chatId, 'Usage: /snooze &lt;vendor&gt; [days]');
+
+    const result = await this._findByVendor(vendorQuery, { excludePaid: true });
+    if (result.ambiguous) {
+      return this.sendMessage(chatId, `Multiple vendors match "${escapeHtml(vendorQuery)}":\n${result.ambiguous.map(v => `• ${escapeHtml(v)}`).join('\n')}\n\nBe more specific.`);
+    }
+    if (!result.bill) return this.sendMessage(chatId, `No unpaid bill found matching "${escapeHtml(vendorQuery)}".`);
+
+    const bill = result.bill;
+    const snoozedUntil = addDays(days);
+    await this.billService.update(bill.id, { ...bill, snoozed_until: snoozedUntil }, bill);
+    return this.sendMessage(chatId,
+      `😴 <b>${escapeHtml(bill.vendor)}</b> snoozed for ${days} day${days === 1 ? '' : 's'} (until ${fmtDate(snoozedUntil)}).`
+    );
+  }
+
   // ─── Callback (button tap) handling ─────────────────────────────────────────
 
   async handleCallback(cb) {
     const chatId = cb.message?.chat?.id;
     const messageId = cb.message?.message_id;
-    const [action, idStr] = (cb.data || '').split(':');
-    const billId = Number(idStr);
+    const parts = (cb.data || '').split(':');
+    const action = parts[0];
+    // paid:<id>, hold:<id>, snooze:<days>:<id>
+    const billId = Number(action === 'snooze' ? parts[2] : parts[1]);
 
     try {
       const bill = await this.billService.getById(billId);
@@ -284,6 +323,14 @@ class TelegramBotService {
         if (chatId && messageId) {
           await this.editMessageText(chatId, messageId, `${cb.message.text}\n\n⏸ <b>On hold.</b>`);
         }
+      } else if (action === 'snooze') {
+        const days = Math.max(1, Math.min(30, Number(parts[1]) || 1));
+        const snoozedUntil = addDays(days);
+        await this.billService.update(bill.id, { ...bill, snoozed_until: snoozedUntil }, bill);
+        await this.answerCallbackQuery(cb.id, `Snoozed ${days}d 😴`);
+        if (chatId && messageId) {
+          await this.editMessageText(chatId, messageId, `${cb.message.text}\n\n😴 <b>Snoozed for ${days} day${days === 1 ? '' : 's'}</b> (until ${fmtDate(snoozedUntil)}).`);
+        }
       } else {
         await this.answerCallbackQuery(cb.id, 'Unknown action.');
       }
@@ -303,11 +350,15 @@ class TelegramBotService {
   // ─── Keyboard helper (shared with notificationService) ─────────────────────
 
   static billActionKeyboard(bill) {
-    const row = [{ text: '✅ Mark Paid', callback_data: `paid:${bill.id}` }];
+    const row1 = [{ text: '✅ Mark Paid', callback_data: `paid:${bill.id}` }];
     if (bill.recurring && bill.recurring !== 'none') {
-      row.push({ text: '⏸ Hold', callback_data: `hold:${bill.id}` });
+      row1.push({ text: '⏸ Hold', callback_data: `hold:${bill.id}` });
     }
-    return { inline_keyboard: [row] };
+    const row2 = [1, 3, 5].map(days => ({
+      text: `😴 ${days}d`,
+      callback_data: `snooze:${days}:${bill.id}`,
+    }));
+    return { inline_keyboard: [row1, row2] };
   }
 }
 

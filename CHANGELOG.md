@@ -11,6 +11,16 @@ No unreleased changes.
 
 ---
 
+## [2.2.0] - 2026-07-14
+
+### Added
+- **Snooze a bill from Telegram** — `😴 1d`/`3d`/`5d` buttons on reminder messages, plus `/snooze <vendor> [days]` (default 1 day). Silences reminders for that one bill for the given number of days without touching its status, due date, or (for recurring bills) the series — it just expires on its own, nothing to remember to undo.
+
+### Fixed
+- **`Hold` didn't actually stop reminders for the bill you held** — `on_hold` only affected future recurring projections; the reminder scheduler (`getBillsNeedingReminders`) never checked it, so a held bill kept nagging you. Now held (and snoozed) bills are excluded from the reminder check entirely.
+
+---
+
 ## [2.1.1] - 2026-07-14
 
 ### Fixed
@@ -100,7 +110,8 @@ No unreleased changes.
 
 ---
 
-[Unreleased]: https://github.com/sovereignalmida/billarr/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/sovereignalmida/billarr/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/sovereignalmida/billarr/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/sovereignalmida/billarr/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/sovereignalmida/billarr/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/sovereignalmida/billarr/compare/v2.0.1...v2.0.2

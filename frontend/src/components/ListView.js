@@ -7,6 +7,7 @@ const INITIAL_FILTER = {
 
 const ListView = ({ bills, selectedBill, onBillClick }) => {
   const [filter, setFilter] = useState(INITIAL_FILTER);
+  const today = new Date().toISOString().split('T')[0];
 
   const setField = (field, value) => setFilter(f => ({ ...f, [field]: value }));
   const hasActiveFilter = filter.status || filter.category || filter.paymentMethod;
@@ -89,6 +90,9 @@ const ListView = ({ bills, selectedBill, onBillClick }) => {
               <div className="bill-card-header">
                 <h3>{bill.vendor}</h3>
                 {bill.on_hold && <span className="status-badge on-hold">on hold</span>}
+                {bill.snoozed_until && bill.snoozed_until >= today && (
+                  <span className="status-badge snoozed" title={`Snoozed until ${bill.snoozed_until}`}>😴 snoozed</span>
+                )}
                 <span className={`status-badge ${bill.status}`}>{bill.status}</span>
               </div>
               <div className="bill-card-body">

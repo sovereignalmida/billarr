@@ -72,11 +72,16 @@ Account: #123456
 📝 Notes appear here
 
 [✅ Mark Paid]  [⏸ Hold]
+[😴 1d]  [😴 3d]  [😴 5d]
 ```
 
-Reminders are two-way — tap a button, or send `/due`, `/summary`, `/paid <vendor>`, `/hold <vendor>`
-etc. directly to the bot. Buttons and commands need a public HTTPS `PUBLIC_URL` set (see
-[TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)); outbound reminders work regardless.
+Reminders are two-way — tap a button, or send `/due`, `/summary`, `/paid <vendor>`, `/hold <vendor>`,
+`/snooze <vendor> [days]` etc. directly to the bot. Buttons and commands need a public HTTPS
+`PUBLIC_URL` set (see [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md)); outbound reminders work regardless.
+
+**Hold** pauses a recurring bill's future occurrences and silences its own reminders. **Snooze**
+silences reminders for one bill for a few days without touching status, due date, or the recurring
+series — it just expires on its own.
 
 ---
 

@@ -104,6 +104,10 @@ const MIGRATIONS = [
   {
     name: '010_telegram_webhook_secret',
     sql: [`ALTER TABLE settings ADD COLUMN telegram_webhook_secret TEXT`]
+  },
+  {
+    name: '011_add_snoozed_until',
+    sql: [`ALTER TABLE bills ADD COLUMN snoozed_until TEXT`]
   }
 ];
 

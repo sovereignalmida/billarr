@@ -183,7 +183,12 @@ class NotificationService {
           if (err) {
             reject(err);
           } else {
+            const today = new Date().toISOString().split('T')[0];
             const billsToNotify = rows.filter(bill => {
+              // On hold or actively snoozed: don't nag about this bill at all
+              if (bill.on_hold) return false;
+              if (bill.snoozed_until && bill.snoozed_until >= today) return false;
+
               const daysUntil = this.getDaysUntilDue(bill.due_date);
               // Include overdue bills up to 30 days
               if (daysUntil < 0 && daysUntil >= -30) return true;

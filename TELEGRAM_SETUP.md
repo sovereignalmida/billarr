@@ -94,7 +94,8 @@ Billarr's bot is two-way — you can act on it, not just receive from it.
 
 **Reminder messages** carry inline buttons:
 - **✅ Mark Paid** — marks the bill paid (and auto-creates the next occurrence if it's recurring, same as doing it in the web UI)
-- **⏸ Hold** — pauses a recurring bill (shown only if the bill recurs)
+- **⏸ Hold** — pauses a recurring bill (shown only if the bill recurs) — also stops reminders for the current bill, not just future occurrences
+- **😴 1d / 3d / 5d** — snooze: silences reminders for *this bill* for that many days, without changing its status, due date, or (for recurring bills) the series itself. Useful for "I know, not dealing with it right now."
 
 **Slash commands** (send any of these directly to your bot):
 
@@ -105,11 +106,17 @@ Billarr's bot is two-way — you can act on it, not just receive from it.
 | `/overdue` | Bills past due |
 | `/summary` | Spend summary (this month, next 7/30 days, overdue count) |
 | `/paid <vendor>` | Marks the vendor's current bill paid |
-| `/hold <vendor>` | Pauses a recurring bill |
+| `/hold <vendor>` | Pauses a recurring bill (also silences its reminders) |
 | `/resume <vendor>` | Resumes a paused bill |
+| `/snooze <vendor> [days]` | Silences reminders for a bit (default 1 day if omitted) |
 
 Vendor matching is case-insensitive and partial (e.g. `/paid netflix` matches "Netflix"). If more
 than one vendor matches, Billarr lists the matches and asks you to be more specific.
+
+**Hold vs. Snooze** — these solve different problems: Hold is a structural, series-level pause (stop
+generating future occurrences of a recurring bill). Snooze is a temporary, single-instance quiet
+period (stop nagging about *this* bill for a few days, recurring or not) that expires on its own —
+nothing to remember to undo.
 
 ### How this works under the hood
 

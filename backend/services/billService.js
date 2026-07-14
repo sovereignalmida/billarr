@@ -92,6 +92,7 @@ class BillService {
   async update(id, data, existingBill) {
     const { vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status } = data;
     const onHold = data.on_hold !== undefined ? !!data.on_hold : !!existingBill.on_hold;
+    const snoozedUntil = data.snoozed_until !== undefined ? data.snoozed_until : existingBill.snoozed_until;
 
     await recordAmountChange(this.db, id, existingBill.amount, amount);
 
@@ -99,12 +100,13 @@ class BillService {
       this.db,
       `UPDATE bills SET vendor = ?, amount = ?, due_date = ?, account_info = ?,
        payment_method = ?, category = ?, notes = ?, recurring = ?, reminder_days = ?, status = ?,
-       auto_renew = ?, cancellation_url = ?, on_hold = ?
+       auto_renew = ?, cancellation_url = ?, on_hold = ?, snoozed_until = ?
        WHERE id = ?`,
       [vendor, amount, due_date, account_info, payment_method, category, notes, recurring, reminder_days, status,
        data.auto_renew ?? existingBill.auto_renew ?? 0,
        data.cancellation_url !== undefined ? data.cancellation_url : existingBill.cancellation_url,
        onHold ? 1 : 0,
+       snoozedUntil || null,
        id]
     );
 
