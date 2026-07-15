@@ -1,6 +1,6 @@
 {
   "name": "billarr",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Self-hosted bill tracking and reminder application for the *arr stack",
   "repository": {
     "type": "git",

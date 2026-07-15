@@ -11,6 +11,23 @@ No unreleased changes.
 
 ---
 
+## [2.2.1] - 2026-07-15
+
+### Security
+- **Admin authorization no longer trusts a JWT's embedded role claim.** `requireAdmin` previously
+  decided admin access purely from the `role` field baked into the token at sign-time, with no
+  database check. A token issued while a user was admin kept granting admin forever, even after
+  that user was demoted or deleted, and would have granted admin to anyone holding a token forged
+  with a leaked signing secret. It now re-checks the user's current role in the database
+  (`authService.getUserRole()`) on every admin-gated request.
+- **Backend port no longer published to the LAN by default.** `docker-compose.example.yml`'s
+  backend service now binds `127.0.0.1:3001:3001` instead of `3001:3001` — the frontend already
+  reaches the backend over Docker's internal network (`frontend/nginx.conf`), so nothing legitimate
+  needs the host-level port exposed beyond localhost. Reduces exposure for the unauthenticated
+  first-run `/api/auth/setup` endpoint in particular.
+
+---
+
 ## [2.2.0] - 2026-07-14
 
 ### Added
@@ -110,7 +127,8 @@ No unreleased changes.
 
 ---
 
-[Unreleased]: https://github.com/sovereignalmida/billarr/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/sovereignalmida/billarr/compare/v2.2.1...HEAD
+[2.2.1]: https://github.com/sovereignalmida/billarr/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/sovereignalmida/billarr/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/sovereignalmida/billarr/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/sovereignalmida/billarr/compare/v2.0.2...v2.1.0

@@ -32,6 +32,12 @@ class AuthService {
     return row ? row.count : 0;
   }
 
+  /** Current role for a user id, straight from the DB — null if the user no longer exists. */
+  async getUserRole(id) {
+    const row = await dbGet(this.db, 'SELECT role FROM users WHERE id = ?', [id]);
+    return row ? row.role : null;
+  }
+
   // ─── User management ───────────────────────────────────────────────────────
 
   async createUser(email, name, password, role = 'member') {

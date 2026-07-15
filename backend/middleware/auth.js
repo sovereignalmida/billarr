@@ -24,11 +24,20 @@ function createAuthMiddleware(authService) {
   }
 
   function requireAdmin(req, res, next) {
-    requireAuth(req, res, () => {
-      if (authService.isEnabled() && req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
+    requireAuth(req, res, async () => {
+      if (!authService.isEnabled()) return next();
+      try {
+        // Re-check the user's current role in the DB rather than trusting the
+        // JWT's role claim — a token signed before a demotion (or with a
+        // leaked secret) must not keep granting admin forever.
+        const currentRole = await authService.getUserRole(req.user?.id);
+        if (currentRole !== 'admin') {
+          return res.status(403).json({ error: 'Admin access required' });
+        }
+        next();
+      } catch {
+        res.status(403).json({ error: 'Admin access required' });
       }
-      next();
     });
   }
 

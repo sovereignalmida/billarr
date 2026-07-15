@@ -6,9 +6,13 @@ services:
     container_name: billarr-backend
     labels:
       - "com.billarr.description=Billarr Backend API"
-      - "com.billarr.version=2.2.0"
+      - "com.billarr.version=2.2.1"
     ports:
-      - "3001:3001"
+      # Loopback-only — the frontend reaches the backend over Docker's
+      # internal network (see frontend/nginx.conf), not via this published
+      # port. This just keeps `curl localhost:3001/...` working for you
+      # without exposing the API directly to your LAN.
+      - "127.0.0.1:3001:3001"
     volumes:
       - ./data:/app/data
     environment:
@@ -38,7 +42,7 @@ services:
     container_name: billarr-frontend
     labels:
       - "com.billarr.description=Billarr Frontend Web Interface"
-      - "com.billarr.version=2.2.0"
+      - "com.billarr.version=2.2.1"
     ports:
       - "8080:80"
     depends_on:
