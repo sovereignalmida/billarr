@@ -74,6 +74,21 @@ function App() {
     if (authStatus && !needsLogin) fetchBills();
   }, [authStatus, needsLogin, fetchBills]);
 
+  // Periodically re-sync currentUser.role — the backend now re-checks role
+  // from the DB on every request, but the frontend only learns the role at
+  // login. Without this, a demoted admin keeps seeing admin controls that
+  // silently 403 until their next login.
+  useEffect(() => {
+    if (authStatus?.mode !== 'jwt' || needsLogin) return;
+    const refreshCurrentUser = () => {
+      apiFetch(`${API_URL}/api/auth/me`)
+        .then(user => setCurrentUser(user))
+        .catch(err => { if (err.status === 401) handleAuthError(); });
+    };
+    const interval = setInterval(refreshCurrentUser, 60000);
+    return () => clearInterval(interval);
+  }, [authStatus, needsLogin, API_URL, handleAuthError]);
+
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   const handleLogin = (user) => {

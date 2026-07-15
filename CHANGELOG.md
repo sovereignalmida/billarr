@@ -11,6 +11,29 @@ No unreleased changes.
 
 ---
 
+## [2.2.2] - 2026-07-15
+
+### Security
+- **Deleted or demoted users no longer keep access via their old token.** The DB-verified role
+  check added in 2.2.1 only covered `requireAdmin`. `requireAuth` — which gates nearly every other
+  `/api` route — still trusted the JWT's embedded claims with no DB lookup, so a deleted or demoted
+  user's token (30-day expiry) kept granting full non-admin access. `requireAuth` now re-checks the
+  user's current role on every request; a missing user row (deleted account) now 401s immediately
+  instead of staying valid for up to a month. `requireAdmin` reuses this freshly-checked role
+  instead of doing its own separate DB lookup.
+
+### Fixed
+- **Role-lookup failures no longer look identical to "not an admin."** A transient DB error (e.g.
+  `SQLITE_BUSY`) during the role check used to be silently swallowed and reported as a bare 403,
+  indistinguishable from a real permission denial. It's now logged, and a role lookup that never
+  resolves (a wedged DB callback) times out after 5s instead of hanging the request forever.
+- **Frontend admin badge/controls no longer go stale after a demotion.** The role check only
+  happened once, at login — a demoted admin kept seeing (and clicking on) admin-only controls that
+  silently 403'd. The frontend now re-fetches `/api/auth/me` every 60s while logged in via JWT to
+  keep the displayed role in sync with the backend's live check.
+
+---
+
 ## [2.2.1] - 2026-07-15
 
 ### Security
