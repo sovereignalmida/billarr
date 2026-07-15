@@ -11,6 +11,32 @@ No unreleased changes.
 
 ---
 
+## [2.2.3] - 2026-07-15
+
+### Fixed
+- **A transient DB error during the 2.2.2 role check logged users out.** `requireAuth`'s new
+  role re-check returned 401 for *any* lookup failure — including a momentary `SQLITE_BUSY` or a
+  timed-out (wedged) callback — and the frontend treats any 401 as "your session is invalid,"
+  clearing the stored token. A transient failure is not proof the token is bad, so lookup errors
+  now return 503 (frontend just shows an error, no forced logout); 401 is reserved for a
+  confirmed-missing user or a genuinely invalid token.
+- **Admin routes did the DB role check twice per request.** The global `/api` middleware
+  (`server.js`) already runs `requireAuth` on every request, populating `req.user` with a
+  freshly-checked role; `requireAdmin` was calling `requireAuth` again on top of that, doubling the
+  DB round trip (and doubling the failure surface) for every admin action. It now reuses
+  `req.user` when the global guard has already set it, and only falls back to running `requireAuth`
+  itself if that's ever not the case.
+- **The 5s role-lookup timeout left its timer running on the normal (fast) path.** `Promise.race`
+  doesn't cancel the loser, so every successful, fast role check still left a 5-second timer
+  scheduled and its closure retained — unnecessary timer/memory pressure at request volume, given
+  this now runs on every authenticated request. The timeout is now cleared as soon as the lookup
+  settles either way.
+
+All three caught by an independent Codex review of the 2.2.2 commit — see `CLAUDE.md`, which now
+makes that review a standing step for security-relevant work on this repo, not a one-off ask.
+
+---
+
 ## [2.2.2] - 2026-07-15
 
 ### Security
